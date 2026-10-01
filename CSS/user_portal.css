@@ -1,0 +1,350 @@
+/* ============================= */
+/*        MAIN CONTENT           */
+/* ============================= */
+
+#main_content {
+    padding: 50px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    color: white;
+}
+
+/* main heading */
+
+#main_content>h1 {
+    font-size: 30px;
+    margin-bottom: 20px;
+    padding: 12px 30px;
+    border-radius: 30px;
+    background: rgba(0, 201, 167, 0.3);
+    backdrop-filter: blur(20px);
+    letter-spacing: 1px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+}
+
+/* intro text */
+
+#main_content>p {
+    width: 70%;
+    text-align: center;
+    margin-bottom: 40px;
+    color: #ccc;
+}
+
+/* ============================= */
+/*        SEARCH BAR             */
+/* ============================= */
+
+.search_bar {
+    width: 100%;
+    /* max-width:1100px; */
+
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+
+    padding: 18px 22px;
+
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px);
+
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+
+    margin-bottom: 40px;
+}
+
+.search_bar form {
+    display: flex;
+    width: 100%;
+    gap: 15px;
+}
+
+.search_bar input {
+    flex: 1;
+
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: none;
+    outline: none;
+
+    background: rgba(255, 255, 255, 0.07);
+    color: white;
+}
+
+.search_bar input::placeholder {
+    color: #bbb;
+}
+
+.search_bar input:focus {
+    background: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 0 10px rgba(0, 201, 167, 0.4);
+}
+
+.search_bar button {
+    width: 60px;
+    padding: 12px;
+    border-radius: 12px;
+    border: none;
+    background: #00c9a7;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.search_bar button:hover {
+    background: #00b39c;
+    transition: 0.3s ease;
+}
+
+/* .filter {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.filter label {
+    color: #ffd369;
+    font-weight: 600;
+}
+
+.filter select {
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: none;
+    background: rgba(255, 255, 255, 0.07);
+    color: white;
+} */
+
+/* ============================= */
+/*        FEATURE CARDS          */
+/* ============================= */
+
+.cards_container {
+    width: 100%;
+    /* max-width:1100px; */
+
+    display: grid;
+    grid-template-columns: repeat(3, minmax(250px, 1fr));
+    gap: 25px;
+
+    margin-bottom: 60px;
+}
+
+.card {
+    padding: 25px;
+
+    border-radius: 18px;
+
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px);
+
+    border: 1px solid rgba(255, 255, 255, 0.15);
+
+    transition: 0.3s ease;
+}
+
+.card:hover {
+    border-color: #00c9a7;
+    transform: translateY(-6px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+}
+
+.card h2 {
+    margin-bottom: 10px;
+}
+
+.card p {
+    font-size: 14px;
+    color: #ccc;
+    margin-bottom: 15px;
+}
+
+.card a {
+    color: #00c9a7;
+    text-decoration: none;
+    font-weight: 600;
+    border: 1px solid transparent;
+    padding: 6px 14px;
+    border-radius: 10px;
+    transition: 0.3s ease;
+}
+
+.card a:hover {
+    border: 1px solid #00c9a7;
+    transition: 0.3s ease;
+}
+
+/* ============================= */
+/*      BUSINESS IDEAS           */
+/* ============================= */
+
+.business_ideas {
+    width: 100%;
+    /* max-width:1100px; */
+    margin-bottom: 60px;
+}
+
+.business_ideas h1 {
+    font-size: 26px;
+    margin-bottom: 25px;
+
+    padding: 10px 25px;
+    background: rgba(0, 201, 167, 0.3);
+    backdrop-filter: blur(20px);
+    border-radius: 25px;
+
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+}
+
+.business_card_container {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(250px, 1fr));
+    gap: 25px;
+}
+
+.business_idea_card {
+    padding: 22px;
+
+    border-radius: 18px;
+
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px);
+
+    border: 1px solid rgba(255, 255, 255, 0.15);
+
+    transition: 0.3s ease;
+}
+
+.business_idea_card:hover {
+    border-color: #00c9a7;
+    transform: translateY(-6px);
+}
+
+.idea_bottom_section {
+    margin-top: 15px;
+
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.idea_bottom_section span {
+    background: #845ec2;
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+}
+
+.idea_bottom_section a {
+    font-weight: 600;
+    cursor: pointer;
+    padding: 6px 14px;
+    border-radius: 12px;
+    transition: 0.3s ease;
+    text-decoration: none;
+    color: #00c9a7;
+    border: 1px solid transparent;
+}
+
+.idea_bottom_section a:hover {
+    border: 1px solid #00c9a7;
+    transition: 0.3s ease;
+}
+
+/* ============================= */
+/*        MENTORS SECTION        */
+/* ============================= */
+
+.mentors_recommendations {
+    width: 100%;
+    /* max-width:1100px; */
+}
+
+.mentors_recommendations h1 {
+    font-size: 26px;
+    margin-bottom: 25px;
+
+    padding: 10px 25px;
+    background: rgba(0, 201, 167, 0.3);
+    backdrop-filter: blur(20px);
+    border-radius: 25px;
+
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+}
+
+.mentors_card_container {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(250px, 1fr));
+    gap: 25px;
+}
+
+.mentors_card {
+    padding: 20px;
+
+    border-radius: 18px;
+
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px);
+
+    border: 1px solid rgba(255, 255, 255, 0.15);
+
+    transition: 0.3s ease;
+}
+
+.mentors_card:hover {
+    border-color: #00c9a7;
+    transform: translateY(-6px);
+}
+
+.mentor {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.mentor_icon img {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: 2px solid #ffd369;
+}
+
+.mentor_profile h1 {
+    font-size: 16px;
+    background: none;
+    padding: 0;
+    box-shadow: none;
+}
+
+.mentor_profile p {
+    font-size: 13px;
+    color: #ccc;
+}
+
+.mentors_card a {
+    color: #00c9a7;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+/* ============================= */
+/*         RESPONSIVE            */
+/* ============================= */
+
+@media(max-width:768px) {
+
+    .search_bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    #main_content>p {
+        width: 95%;
+    }
+
+}

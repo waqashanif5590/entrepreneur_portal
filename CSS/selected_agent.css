@@ -1,0 +1,305 @@
+/* ============================= */
+/*        MAIN CONTENT           */
+/* ============================= */
+
+#main_content {
+    padding: 50px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    color: white;
+}
+
+/* heading */
+
+#main_content>h2 {
+    font-size: 30px;
+    margin-bottom: 10px;
+    padding: 12px 30px;
+
+    background: rgba(0, 201, 167, 0.3);
+    border-radius: 30px;
+
+    letter-spacing: 1px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+}
+
+#main_content>p {
+    width: 70%;
+    text-align: center;
+    margin-bottom: 40px;
+    color: #ccc;
+}
+
+/* ============================= */
+/*        PROFILE CARD           */
+/* ============================= */
+
+.profile_card {
+    width: 100%;
+    max-width: 1100px;
+
+    padding: 30px;
+
+    border-radius: 20px;
+
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px);
+
+    border: 1px solid rgba(255, 255, 255, 0.15);
+
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+}
+
+/* ============================= */
+/*        PROFILE HEADER         */
+/* ============================= */
+
+.profile_header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    margin-bottom: 30px;
+}
+
+.profile_info {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+/* profile image */
+
+.profile_pic {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 3px solid #00c9a7;
+}
+
+.profile_pic img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+/* basic info */
+
+.profile_basic h3 {
+    font-size: 22px;
+    margin-bottom: 4px;
+}
+
+.profile_basic .email {
+    font-size: 14px;
+    color: #bbb;
+}
+
+.profile_basic .expertise {
+    font-size: 14px;
+    color: #ffd369;
+}
+
+/* status badge */
+
+.status {
+    padding: 6px 12px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.status.Approved {
+    background: #2ecc71;
+}
+
+.status.Pending {
+    background: #f39c12;
+}
+
+.status.Blocked {
+    background: #e74c3c;
+}
+
+.status.Rejected {
+    background: #e74c3c;
+}
+
+/* ============================= */
+/*        PROFILE SECTIONS       */
+/* ============================= */
+
+.profile_section {
+    margin-bottom: 30px;
+}
+
+.profile_section h4 {
+    margin-bottom: 15px;
+
+    padding: 8px 18px;
+
+    background: rgba(0, 201, 167, 0.3);
+    border-radius: 20px;
+
+    display: inline-block;
+
+    font-size: 16px;
+}
+
+/* grid layout */
+
+.info_grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+}
+
+.info_grid p {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 12px 15px;
+    border-radius: 10px;
+    font-size: 14px;
+}
+
+/* ============================= */
+/*         DOCUMENTS             */
+/* ============================= */
+
+.documents {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.doc_btn {
+    padding: 8px 16px;
+
+    border-radius: 10px;
+
+    border: 1px solid #00c9a7;
+
+    color: #00c9a7;
+    text-decoration: none;
+
+    transition: 0.3s;
+}
+
+.doc_btn:hover {
+    background: #00c9a7;
+    color: white;
+}
+
+/* ============================= */
+/*        PROFILE ACTIONS        */
+/* ============================= */
+
+.profile_actions {
+    margin-top: 35px;
+
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+/* buttons */
+
+.profile_actions a {
+    padding: 10px 18px;
+    border-radius: 12px;
+    text-decoration: none;
+    font-weight: 600;
+    transition: 0.3s;
+}
+
+.approve_btn {
+    background: #2ecc71;
+    color: white;
+}
+
+.reject_btn {
+    background: #f39c12;
+    color: white;
+}
+
+.block_btn {
+    background: #e74c3c;
+    color: white;
+}
+
+.back_btn {
+    border: 1px solid #00c9a7;
+    color: #00c9a7;
+}
+
+.back_btn:hover {
+    background: #00c9a7;
+    color: white;
+}
+
+/* hover */
+
+.profile_actions a:hover {
+    transform: translateY(-3px);
+}
+
+/* ============================= */
+/*         RESPONSIVE            */
+/* ============================= */
+
+@media(max-width:768px) {
+
+    .profile_header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+    }
+
+    #main_content>p {
+        width: 95%;
+    }
+
+}
+
+.add_card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    padding: 25px;
+
+    border-radius: 18px;
+
+    /* background: rgba(255, 255, 255, 0.08); */
+    backdrop-filter: blur(20px);
+
+    border: 1px dashed rgba(255, 255, 255, 0.3);
+
+    transition: 0.3s ease;
+}
+
+.add_card:hover {
+    border-color: #00c9a7;
+}
+
+.add_card h2 {
+    margin-bottom: 10px;
+}
+
+.add_card a {
+    font-size: 20px;
+    color: #00c9a7;
+    padding: 10px;
+    border-radius: 12px;
+    text-decoration: none;
+    border: 2px solid transparent;
+    transition: 0.3s ease;
+}
+
+.add_card a:hover {
+    border-color: #00c9a7;
+    transition: 0.3s ease;
+}

@@ -1,0 +1,129 @@
+/* ============================= */
+/*        PROFILE CARD           */
+/* ============================= */
+
+
+.card_container {
+    width: 100%;
+    display: grid;
+    /* Only one column in a row */
+    grid-template-columns: 1fr;
+    gap: 25px;
+}
+
+/* domain card */
+
+.card {
+    padding: 25px;
+
+    border-radius: 18px;
+
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px);
+
+    border: 1px solid rgba(255, 255, 255, 0.15);
+
+    transition: 0.3s ease;
+}
+
+.card:hover {
+    border-color: #00c9a7;
+    transform: translateY(-6px);
+}
+
+.card h2 {
+    margin-bottom: 10px;
+}
+
+.card p {
+    font-size: 14px;
+    color: #ccc;
+    margin-bottom: 15px;
+}
+
+.card_bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0px 20px;
+}
+
+.card_bottom span {
+    background-color: #00c9a7;
+    padding: 5px 10px;
+    border-radius: 10px;
+    font-size: 13px;
+}
+
+.card_bottom a {
+    padding: 8px 14px;
+    border-radius: 10px;
+    border: 1px solid #00c9a7;
+    color: #00c9a7;
+    text-decoration: none;
+    transition: 0.3s;
+}
+
+.card_bottom a:hover {
+    background-color: #00c9a7;
+    color: white;
+    transition: 0.3s;
+}
+
+/* ============================= */
+/*         ADD CARD              */
+/* ============================= */
+
+.add_card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 25px;
+
+    border-radius: 18px;
+
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px);
+
+    border: 1px dashed rgba(255, 255, 255, 0.3);
+
+    transition: 0.3s ease;
+}
+
+.add_card:hover {
+    border-color: #00c9a7;
+}
+
+.add_card h2 {
+    margin-bottom: 10px;
+}
+
+.add_card a {
+    font-size: 40px;
+    color: #00c9a7;
+    text-decoration: none;
+}
+
+.lead a {
+    font-size: 20px;
+    color: #00c9a7;
+    text-decoration: none;
+}
+
+.explore_btn {
+    padding: 8px 14px;
+    border-radius: 10px;
+
+    border: 1px solid #00c9a7;
+    color: #00c9a7;
+    text-decoration: none;
+
+    transition: 0.3s;
+}
+
+.explore_btn:hover {
+    background: #00c9a7;
+    color: white;
+}

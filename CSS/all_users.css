@@ -1,0 +1,190 @@
+
+
+/* ----------------------------------------------------
+   PAGE HEADING
+----------------------------------------------------- */
+#main_content h2 {
+    text-align: center;
+    font-size: 32px;
+    color: #2c3e50;
+    margin-bottom: 8px;
+}
+
+#main_content p {
+    text-align: center;
+    font-size: 16px;
+    color: #555;
+    margin-bottom: 40px;
+}
+
+/* ----------------------------------------------------
+   SEARCH BOX
+----------------------------------------------------- */
+.search_box {
+    width: 60%;
+    margin: 0 auto 30px auto;
+}
+
+.search_box input {
+    width: 100%;
+    padding: 12px 18px;
+    border-radius: 14px;
+    border: none;
+    outline: none;
+    font-size: 15px;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+}
+
+/* ----------------------------------------------------
+   FILTER (RADIO BUTTONS)
+----------------------------------------------------- */
+.filter_box {
+    display: flex;
+    justify-content: center;
+    gap: 25px;
+    margin-bottom: 35px;
+}
+
+.filter_box label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+/* Hide default radio */
+.filter_box input[type="radio"] {
+    accent-color: #ffcc00;
+    cursor: pointer;
+}
+
+/* Colored text */
+.filter_box .Active {
+    color: #27ae60;
+}
+
+.filter_box .Pending {
+    color: #b8860b;
+}
+
+.filter_box .Blocked {
+    color: #ff0000;
+}
+
+/* ----------------------------------------------------
+   RESPONSIVE
+----------------------------------------------------- */
+@media (max-width: 768px) {
+    .filter_box {
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+    }
+}
+
+
+/* ----------------------------------------------------
+   TABLE
+----------------------------------------------------- */
+.table_container {
+    width: 95%;
+    margin: 0 auto;
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: rgba(255, 255, 255, 0.10);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.30);
+    border-radius: 18px;
+    overflow: hidden;
+}
+
+thead {
+    background: rgba(255, 204, 0, 0.18);
+}
+
+th,
+td {
+    padding: 15px;
+    text-align: left;
+    font-size: 15px;
+}
+
+th {
+    color: #2c3e50;
+    letter-spacing: 0.4px;
+}
+
+/* ----------------------------------------------------
+   PROFILE IMAGE IN TABLE
+----------------------------------------------------- */
+.table_profile {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #ffcc00;
+}
+
+/* ----------------------------------------------------
+   STATUS BADGES
+----------------------------------------------------- */
+.badge {
+    padding: 6px 14px;
+    border-radius: 14px;
+    font-weight: bold;
+    font-size: 13px;
+}
+
+.badge.active {
+    background: rgba(39, 174, 96, 0.15);
+    color: #27ae60;
+}
+
+.badge.Pending {
+    background: rgba(255, 204, 0, 0.18);
+    color: #b8860b;
+}
+
+.badge.Blocked {
+    background: rgba(255, 0, 0, 0.15);
+    color: #ff0000;
+}
+
+/* ----------------------------------------------------
+   VIEW BUTTON
+----------------------------------------------------- */
+.view_btn {
+    text-decoration: none;
+    color: #ffcc00;
+    font-weight: bold;
+    padding: 6px 14px;
+    border-radius: 12px;
+    border: 2px solid transparent;
+    transition: 0.3s ease;
+}
+
+.view_btn:hover {
+    border-color: #ffcc00;
+}
+
+/* ----------------------------------------------------
+   RESPONSIVE
+----------------------------------------------------- */
+@media (max-width: 768px) {
+    .search_box {
+        width: 90%;
+    }
+
+    th,
+    td {
+        font-size: 14px;
+    }
+}
