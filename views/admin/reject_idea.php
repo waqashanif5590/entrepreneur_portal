@@ -1,0 +1,31 @@
+<?php
+require_once __DIR__ . '/../../config/database.php';
+session_start();
+if (empty($_SESSION['loggedin']) || empty($_SESSION['id'])) {
+    http_response_code(403);
+    exit('Access denied.');
+}
+
+$accountId = (int)$_SESSION['id'];
+$roleStatement = $conn->prepare('SELECT entity_type FROM accounts WHERE id = ?');
+$roleStatement->bind_param('i', $accountId);
+$roleStatement->execute();
+$account = $roleStatement->get_result()->fetch_assoc();
+$roleStatement->close();
+if (($account['entity_type'] ?? '') !== 'admin') {
+    http_response_code(403);
+    exit('Access denied.');
+}
+
+$ideaId = base64_decode($_GET['business_idea_id'] ?? '', true);
+if ($ideaId === false || !ctype_digit($ideaId)) {
+    http_response_code(400);
+    exit('Invalid request.');
+}
+$statement = $conn->prepare("UPDATE business_ideas SET status = 'Rejected' WHERE id = ? AND status = 'Pending'");
+$statement->bind_param('i', $ideaId);
+$statement->execute();
+$alert = $statement->affected_rows ? 'Idea status rejected' : 'Idea was not pending';
+$statement->close();
+header('Location: ../ideas/idea_details.php?business_idea_id=' . rawurlencode(base64_encode($ideaId)) . '&alert=' . urlencode($alert));
+exit();
