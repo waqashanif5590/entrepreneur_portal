@@ -53,7 +53,7 @@
                 <a href="../home/about.php"><i class="fas fa-info-circle"></i><span class="nav_links">About</span></a>';
             } else if ($row["entity_type"] === 'agent') {
 
-                $encoded_author_id = base64_encode($_SESSION['id']);
+                $agentAccountId = (int)$_SESSION['id'];
 
                 $check_profile_sql = "SELECT * FROM `profiles` WHERE agent_account_id='$logged_id'";
                 $check_profile_result = mysqli_query($conn, $check_profile_sql);
@@ -68,8 +68,8 @@
                 }
                 echo '
                 <a href="../mentor/agent_portal.php"><i class="fas fa-home"></i><span class="nav_links">Home</span></a>
-                <a href="../profiles/selected_agent.php?agent_account_id=' . $encoded_author_id . '"><i class="fas fa-user-tie"></i><span class="nav_links">My Profile</span></a>
-                <a href="../profiles/selected_agent_ideas.php?agent_profile_id=' . $encoded_author_id . '"><i class="fas fa-layer-group"></i><span class="nav_links">My domains</span></a>
+                <a href="../profiles/selected_agent.php?agent_account_id=' . $agentAccountId . '"><i class="fas fa-user-tie"></i><span class="nav_links">My Profile</span></a>
+                <a href="../profiles/selected_agent_ideas.php?agent_profile_id=' . $agentAccountId . '"><i class="fas fa-layer-group"></i><span class="nav_links">My domains</span></a>
                 <a href="' . $url . '"><i class="fas fa-plus"></i><span class="nav_links">Create Forum</span></a>
                 <a href="../community/forum_list_shared.php"><i class="fas fa-search"></i><span class="nav_links">Explore Forum</span></a>
 

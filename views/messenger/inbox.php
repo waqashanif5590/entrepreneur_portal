@@ -6,7 +6,12 @@ if (!isset($_SESSION['id'])) {
     die("Login required");
 }
 
-$chat_with = base64_decode($_GET['user_id']);
+$rawRecipientId = $_GET['user_id'] ?? null;
+if (!is_string($rawRecipientId) || !preg_match('/\A[0-9]+\z/', $rawRecipientId) || (int)$rawRecipientId < 1 || (string)(int)$rawRecipientId !== ltrim($rawRecipientId, '0')) {
+    http_response_code(400);
+    exit('Invalid user.');
+}
+$chat_with = (int)$rawRecipientId;
 
 $recipient_image = '../../public/assets/images/profile.png';
 $my_id = $_SESSION['id'];
@@ -82,14 +87,6 @@ if ($my_type === 'user' && $chat_with_type === 'agent') {
                     ?>
             </div>
             <?php
-
-            if (!isset($_GET['user_id'])) {
-                die("No chat selected");
-            }
-
-            if (!is_numeric($chat_with)) {
-                die("Invalid user");
-            }
 
             /* =============================
    SEND MESSAGE

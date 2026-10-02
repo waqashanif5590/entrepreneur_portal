@@ -88,7 +88,7 @@
                         </tr>';
                             }
                             while ($row = mysqli_fetch_assoc($result)) {
-                                $agent_account_id = base64_encode($row["agent_account_id"]);
+                                $agent_account_id = (int)$row["agent_account_id"];
                                 echo '<tr>
                                         <td><img src="../../uploads/profiles/' . $row['profile_image'] . '" class="table_profile"></td>
                                         <td>' . $row["agent_f_name"] . ' ' . $row["agent_l_name"] . '</td>

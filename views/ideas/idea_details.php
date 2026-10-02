@@ -19,12 +19,12 @@ if (!in_array($role, ['admin', 'agent', 'user'], true)) {
     exit('Access denied.');
 }
 
-$encodedIdeaId = $_GET['business_idea_id'] ?? '';
-$ideaId = base64_decode($encodedIdeaId, true);
-if ($ideaId === false || !ctype_digit($ideaId)) {
+$rawIdeaId = $_GET['business_idea_id'] ?? null;
+if (!is_string($rawIdeaId) || !preg_match('/\A[0-9]+\z/', $rawIdeaId) || (int)$rawIdeaId < 1 || (string)(int)$rawIdeaId !== ltrim($rawIdeaId, '0')) {
     http_response_code(400);
     exit('Invalid idea request.');
 }
+$ideaId = (int)$rawIdeaId;
 
 $ideaStatement = $conn->prepare('SELECT * FROM business_ideas WHERE id = ? LIMIT 1');
 $ideaStatement->bind_param('i', $ideaId);
@@ -38,8 +38,7 @@ if (!$idea || ($role === 'user' && $idea['status'] !== 'Approved')) {
 
 $agentAccountId = (int)$idea['user_id'];
 $isOwner = $role === 'agent' && $agentAccountId === $accountId;
-$encodedAgentId = base64_encode((string)$agentAccountId);
-$encodedIdeaId = base64_encode((string)$idea['id']);
+$ideaId = (int)$idea['id'];
 $escape = static fn($value) => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 $alert = $_GET['alert'] ?? '';
 
@@ -83,6 +82,7 @@ $reviews = $reviewsStatement->get_result();
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -94,6 +94,7 @@ $reviews = $reviewsStatement->get_result();
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Miranda+Sans:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
 </head>
+
 <body>
     <?php include __DIR__ . '/../../components/_header.php'; ?>
     <div id="container">
@@ -117,23 +118,31 @@ $reviews = $reviewsStatement->get_result();
                     </div>
                     <?php if ($stats): ?>
                         <div class="engagement_stats">
-                            <div class="stat_box">⭐ <span><?php echo number_format((float)$stats['rating'], 1); ?></span><p>Rating</p></div>
-                            <div class="stat_box">👍 <span><?php echo (int)$stats['likes']; ?></span><p>Likes</p></div>
-                            <div class="stat_box">👥 <span><?php echo (int)$stats['followers']; ?></span><p>Followers</p></div>
+                            <div class="stat_box">⭐ <span><?php echo number_format((float)$stats['rating'], 1); ?></span>
+                                <p>Rating</p>
+                            </div>
+                            <div class="stat_box">👍 <span><?php echo (int)$stats['likes']; ?></span>
+                                <p>Likes</p>
+                            </div>
+                            <div class="stat_box">👥 <span><?php echo (int)$stats['followers']; ?></span>
+                                <p>Followers</p>
+                            </div>
                         </div>
                     <?php endif; ?>
                     <?php if ($viewerCanEngage): ?>
                         <div class="profile_actions">
-                            <?php if ($hasLiked): ?>
-                                <button class="like_btn liked" disabled>You Liked</button>
-                            <?php else: ?>
-                                <a href="../actions/like.php?agent_profile_id=<?php echo $agentAccountId; ?>" class="like_btn">Like</a>
-                            <?php endif; ?>
-                            <?php if ($isFollowing): ?>
-                                <button class="follow_btn following" disabled>Following</button>
-                            <?php else: ?>
-                                <a href="../actions/follow.php?agent_profile_id=<?php echo $agentAccountId; ?>" class="follow_btn">Follow</a>
-                            <?php endif; ?>
+                            <div>
+                                <?php if ($hasLiked): ?>
+                                    <button class="like_btn liked" disabled>You Liked</button>
+                                <?php else: ?>
+                                    <a href="../actions/like.php?agent_profile_id=<?php echo $agentAccountId; ?>" class="like_btn">Like</a>
+                                <?php endif; ?>
+                                <?php if ($isFollowing): ?>
+                                    <button class="follow_btn following" disabled>Following</button>
+                                <?php else: ?>
+                                    <a href="../actions/follow.php?agent_profile_id=<?php echo $agentAccountId; ?>" class="follow_btn">Follow</a>
+                                <?php endif; ?>
+                            </div>
                             <?php if (!$hasRated): ?>
                                 <div class="rating_section">
                                     <h3>Rate this mentor</h3>
@@ -151,18 +160,20 @@ $reviews = $reviewsStatement->get_result();
 
             <div class="business_details">
                 <h1><?php echo $escape($idea['idea_title']); ?></h1>
-                <?php foreach ([
-                    'Business Category' => 'idea_category',
-                    'Business Stage' => 'idea_stage',
-                    'Problem Statement' => 'problem_statement',
-                    'Proposed Solutions' => 'problem_solution',
-                    'Unique Value Proposition' => 'proposition_value',
-                    'Target Market' => 'target_market',
-                    'Market Size' => 'market_size',
-                    'Business Model' => 'business_model',
-                    'Required Resources' => 'resources',
-                    'Expected Outcome' => 'outcomes',
-                ] as $label => $field): ?>
+                <?php foreach (
+                    [
+                        'Business Category' => 'idea_category',
+                        'Business Stage' => 'idea_stage',
+                        'Problem Statement' => 'problem_statement',
+                        'Proposed Solutions' => 'problem_solution',
+                        'Unique Value Proposition' => 'proposition_value',
+                        'Target Market' => 'target_market',
+                        'Market Size' => 'market_size',
+                        'Business Model' => 'business_model',
+                        'Required Resources' => 'resources',
+                        'Expected Outcome' => 'outcomes',
+                    ] as $label => $field
+                ): ?>
                     <div class="field_set">
                         <h2><?php echo $escape($label); ?></h2>
                         <p><?php echo nl2br($escape($idea[$field])); ?></p>
@@ -172,18 +183,18 @@ $reviews = $reviewsStatement->get_result();
                 <div class="profile_actions">
                     <?php if ($role === 'admin'): ?>
                         <?php if ($idea['status'] === 'Pending'): ?>
-                            <a href="../admin/approve_idea.php?business_idea_id=<?php echo rawurlencode($encodedIdeaId); ?>" class="approve_btn">Approve</a>
-                            <a href="../admin/reject_idea.php?business_idea_id=<?php echo rawurlencode($encodedIdeaId); ?>" class="reject_btn">Reject</a>
+                            <a href="../admin/approve_idea.php?business_idea_id=<?php echo $ideaId; ?>" class="approve_btn">Approve</a>
+                            <a href="../admin/reject_idea.php?business_idea_id=<?php echo $ideaId; ?>" class="reject_btn">Reject</a>
                         <?php else: ?>
-                            <a href="../admin/delete_idea.php?business_idea_id=<?php echo rawurlencode($encodedIdeaId); ?>" class="block_btn">Delete</a>
+                            <a href="../admin/delete_idea.php?business_idea_id=<?php echo $ideaId; ?>" class="block_btn">Delete</a>
                         <?php endif; ?>
                         <a href="ideas_list.php" class="back_btn">Back to ideas</a>
                     <?php elseif ($isOwner): ?>
-                        <a href="../mentor/update_idea.php?business_idea_id=<?php echo rawurlencode($encodedIdeaId); ?>" class="approve_btn">Update</a>
-                        <a href="../admin/delete_idea.php?business_idea_id=<?php echo rawurlencode($encodedIdeaId); ?>" class="reject_btn">Delete</a>
-                        <a href="../profiles/selected_agent_ideas.php?agent_profile_id=<?php echo rawurlencode($encodedAgentId); ?>" class="back_btn">Back to ideas</a>
+                        <a href="../mentor/update_idea.php?business_idea_id=<?php echo $ideaId; ?>" class="approve_btn">Update</a>
+                        <a href="../admin/delete_idea.php?business_idea_id=<?php echo $ideaId; ?>" class="reject_btn">Delete</a>
+                        <a href="../profiles/selected_agent_ideas.php?agent_profile_id=<?php echo $agentAccountId; ?>" class="back_btn">Back to ideas</a>
                     <?php else: ?>
-                        <a href="../profiles/selected_agent_ideas.php?agent_profile_id=<?php echo rawurlencode($encodedAgentId); ?>" class="back_btn">Back to ideas</a>
+                        <a href="../profiles/selected_agent_ideas.php?agent_profile_id=<?php echo $agentAccountId; ?>" class="back_btn">Back to ideas</a>
                     <?php endif; ?>
                 </div>
             </div>
@@ -206,7 +217,7 @@ $reviews = $reviewsStatement->get_result();
                     <?php endif; ?>
                 </div>
                 <?php if ($role !== 'admin'): ?>
-                    <form class="add_comment" action="../actions/submit_review.php?business_idea_id=<?php echo rawurlencode($encodedIdeaId); ?>&amp;agent_profile_id=<?php echo rawurlencode($encodedAgentId); ?>" method="post">
+                    <form class="add_comment" action="../actions/submit_review.php?business_idea_id=<?php echo $ideaId; ?>&amp;agent_profile_id=<?php echo $agentAccountId; ?>" method="post">
                         <textarea name="review" placeholder="Add your comment here..." required></textarea>
                         <button type="submit">Submit</button>
                     </form>
@@ -214,16 +225,19 @@ $reviews = $reviewsStatement->get_result();
             </section>
         </section>
     </div>
-    <section id="footer"><p>© 2025 Entrepreneur Portal. All Rights Reserved.</p></section>
+    <section id="footer">
+        <p>© 2025 Entrepreneur Portal. All Rights Reserved.</p>
+    </section>
     <script src="../../public/assets/JS/siderbar.js"></script>
     <?php $reviewsStatement->close(); ?>
     <script>
         document.querySelectorAll('.star[data-rating]').forEach((star) => {
             star.addEventListener('click', () => {
                 const rating = star.dataset.rating;
-                            window.location.href = '../actions/rate.php?id=<?php echo $agentAccountId; ?>&rating=' + encodeURIComponent(rating);
+                window.location.href = '../actions/rate.php?id=<?php echo $agentAccountId; ?>&rating=' + encodeURIComponent(rating);
             });
         });
     </script>
 </body>
+
 </html>

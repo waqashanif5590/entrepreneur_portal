@@ -7,7 +7,12 @@ if (!isset($_SESSION['id'])) {
     exit();
 }
 
-$agent_profile_id = $_GET['id'];
+$rawAgentAccountId = $_GET['id'] ?? null;
+if (!is_string($rawAgentAccountId) || !preg_match('/\A[0-9]+\z/', $rawAgentAccountId) || (int)$rawAgentAccountId < 1 || (string)(int)$rawAgentAccountId !== ltrim($rawAgentAccountId, '0')) {
+    http_response_code(400);
+    exit('Invalid agent request.');
+}
+$agent_profile_id = (int)$rawAgentAccountId;
 $user_rating = $_GET['rating'];
 $user_id = $_SESSION['id'];
 
@@ -17,7 +22,7 @@ function redirect_back($agent_profile_id, $alert) {
         $separator = strpos($ref, '?') !== false ? '&' : '?';
         header('Location: ' . $ref . $separator . 'alert=' . urlencode($alert));
     } else {
-        header('Location: ../profiles/selected_agent_ideas.php?agent_profile_id=' . base64_encode($agent_profile_id) . '&alert=' . urlencode($alert));
+        header('Location: ../profiles/selected_agent_ideas.php?agent_profile_id=' . $agent_profile_id . '&alert=' . urlencode($alert));
     }
     exit();
 }

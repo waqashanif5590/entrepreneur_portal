@@ -18,11 +18,12 @@ if (!in_array($role, ['admin', 'agent'], true)) {
     exit('Access denied.');
 }
 
-$ideaId = base64_decode($_GET['business_idea_id'] ?? '', true);
-if ($ideaId === false || !ctype_digit($ideaId)) {
+$rawIdeaId = $_GET['business_idea_id'] ?? null;
+if (!is_string($rawIdeaId) || !preg_match('/\A[0-9]+\z/', $rawIdeaId) || (int)$rawIdeaId < 1 || (string)(int)$rawIdeaId !== ltrim($rawIdeaId, '0')) {
     http_response_code(400);
     exit('Invalid request.');
 }
+$ideaId = (int)$rawIdeaId;
 
 $ideaStatement = $conn->prepare('SELECT user_id FROM business_ideas WHERE id = ? LIMIT 1');
 $ideaStatement->bind_param('i', $ideaId);

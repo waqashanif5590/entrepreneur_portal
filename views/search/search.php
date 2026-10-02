@@ -60,8 +60,8 @@ $mentor_result = mysqli_query($conn, $mentor_sql);
                     <?php
                     if (mysqli_num_rows($ideas_result) > 0) {
                         while ($row = mysqli_fetch_assoc($ideas_result)) {
-                            $id = base64_encode($row["id"]);
-                            $agent = base64_encode($row["user_id"]);
+                            $id = (int)$row["id"];
+                            $agent = (int)$row["user_id"];
                             echo "
         <div class='business_idea_card'>
             <h2>{$row['idea_title']}</h2>
@@ -88,7 +88,7 @@ $mentor_result = mysqli_query($conn, $mentor_sql);
                     <?php
                     if (mysqli_num_rows($mentor_result) > 0) {
                         while ($row = mysqli_fetch_assoc($mentor_result)) {
-                            $id = base64_encode($row["agent_account_id"]);
+                            $id = (int)$row["agent_account_id"];
                             echo "
         <div class='mentors_card'>
             <div class='mentor'>

@@ -1,6 +1,7 @@
 <?php
+session_start();
 require_once __DIR__ . '/../../config/database.php';
-if (isset($_SESSION['loggedin']) || $_SESSION['loggedin'] == true) {
+if (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] === true) {
     if ($_SERVER['REQUEST_METHOD'] == "POST") {
 
         $idea_title = htmlspecialchars($_POST["idea_title"], ENT_QUOTES, 'UTF-8');

@@ -17,15 +17,16 @@ if (($account['entity_type'] ?? '') !== 'admin') {
     exit('Access denied.');
 }
 
-$ideaId = base64_decode($_GET['business_idea_id'] ?? '', true);
-if ($ideaId === false || !ctype_digit($ideaId)) {
+$rawIdeaId = $_GET['business_idea_id'] ?? null;
+if (!is_string($rawIdeaId) || !preg_match('/\A[0-9]+\z/', $rawIdeaId) || (int)$rawIdeaId < 1 || (string)(int)$rawIdeaId !== ltrim($rawIdeaId, '0')) {
     http_response_code(400);
     exit('Invalid request.');
 }
+$ideaId = (int)$rawIdeaId;
 $statement = $conn->prepare("UPDATE business_ideas SET status = 'Rejected' WHERE id = ? AND status = 'Pending'");
 $statement->bind_param('i', $ideaId);
 $statement->execute();
 $alert = $statement->affected_rows ? 'Idea status rejected' : 'Idea was not pending';
 $statement->close();
-header('Location: ../ideas/idea_details.php?business_idea_id=' . rawurlencode(base64_encode($ideaId)) . '&alert=' . urlencode($alert));
+header('Location: ../ideas/idea_details.php?business_idea_id=' . $ideaId . '&alert=' . urlencode($alert));
 exit();

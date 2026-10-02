@@ -44,8 +44,8 @@ require_once __DIR__ . '/../../config/database.php';
                         if ($numRows > 0) {
                             while ($row = mysqli_fetch_assoc($result)) {
                                 // $_SESSION['agent_profile_id'] = $row['agent_profile_id'];
-                                $business_idea_id = base64_encode($row["id"]);
-                                $agent_profile_id = base64_encode($row["user_id"]);
+                                $business_idea_id = (int)$row["id"];
+                                $agent_profile_id = (int)$row["user_id"];
                                 echo '<div class="business_idea_card">
                                         <h2>' . $row["idea_title"] . '</h2>
                                         <p>' . substr($row["problem_statement"], 0, 170) . ' ........ </p>

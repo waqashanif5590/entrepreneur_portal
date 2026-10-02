@@ -91,15 +91,15 @@ require_once __DIR__ . '/../../config/database.php';
                                         $expertise = $row2['field_expertise'];
                                         $profile_image = $row2['profile_image'];
                                     }
-                                    $encoded_agent_id = base64_encode($agent_account_id);
-                                    $encoded_business_id = base64_encode($business_idea_id);
+                                    $agentAccountId = (int)$agent_account_id;
+                                    $ideaId = (int)$business_idea_id;
                                     echo '<tr>
                             <td><img src="../../uploads/profiles/' . $profile_image . '" class="table_profile"></td>
                             <td>' . $agent_name . '</td>
                             <td><span>' . $row["idea_title"] . '</span></td>
                             <td>' . $expertise . '</td>
                             <td><span class="badge ' . $row["status"] . '">' . $row["status"] . '</span></td>
-                            <td><a href="./idea_details.php?agent_profile_id=' . $encoded_agent_id . '&business_idea_id=' . $encoded_business_id . '">View</a></td>
+                            <td><a href="./idea_details.php?agent_profile_id=' . $agentAccountId . '&business_idea_id=' . $ideaId . '">View</a></td>
                         </tr>';
                                 }
                             }
@@ -122,15 +122,15 @@ require_once __DIR__ . '/../../config/database.php';
                                         $expertise = $row2['field_expertise'];
                                         $profile_image = $row2['profile_image'];
                                     }
-                                    $encoded_agent_id = base64_encode($agent_account_id);
-                                    $encoded_business_id = base64_encode($business_idea_id);
+                                    $agentAccountId = (int)$agent_account_id;
+                                    $ideaId = (int)$business_idea_id;
                                     echo '<tr>
                             <td><img src="../../uploads/profiles/' . $profile_image . '" class="table_profile"></td>
                             <td>' . $agent_name . '</td>
                             <td><span>' . $row["idea_title"] . '</span></td>
                             <td>' . $expertise . '</td>
                             <td><span class="badge ' . $row["status"] . '">' . $row["status"] . '</span></td>
-                            <td><a href="./idea_details.php?agent_profile_id=' . $encoded_agent_id . '&business_idea_id=' . $encoded_business_id . '">View</a></td>
+                            <td><a href="./idea_details.php?agent_profile_id=' . $agentAccountId . '&business_idea_id=' . $ideaId . '">View</a></td>
                         </tr>';
                                 }
                             }

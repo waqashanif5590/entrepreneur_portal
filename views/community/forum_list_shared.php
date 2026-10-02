@@ -22,6 +22,7 @@ if (!in_array($role, ['admin', 'agent', 'user'], true)) {
 
 $statusFilter = '';
 $forums = false;
+$agentProfileStatus = null;
 if ($role === 'admin') {
     $requestedStatus = $_GET['status'] ?? '';
     if (in_array($requestedStatus, ['Pending', 'Approved'], true)) {
@@ -35,6 +36,13 @@ if ($role === 'admin') {
     $forums = $statement->get_result();
     $statement->close();
 } elseif ($role === 'agent') {
+    $profileStatement = $conn->prepare('SELECT status FROM profiles WHERE agent_account_id = ? LIMIT 1');
+    $profileStatement->bind_param('i', $accountId);
+    $profileStatement->execute();
+    $agentProfile = $profileStatement->get_result()->fetch_assoc();
+    $agentProfileStatus = $agentProfile['status'] ?? null;
+    $profileStatement->close();
+
     $statement = $conn->prepare('SELECT id AS forum_id, user_id AS author_id, forum_title, forum_desc, status, date FROM forums WHERE user_id = ? ORDER BY date DESC');
     $statement->bind_param('i', $accountId);
     $statement->execute();
@@ -94,6 +102,8 @@ $alert = $_GET['alert'] ?? '';
 
                 <?php if ($alert !== ''): ?>
                     <p id="alert_message"><?php echo $escape($alert); ?></p>
+                <?php elseif ($role === 'agent' && $agentProfileStatus === 'Pending'): ?>
+                    <p id="alert_message">Your profile is pending for admin approval. Please wait for admin response</p>
                 <?php endif; ?>
 
                 <h1>List of forums</h1>
@@ -101,8 +111,8 @@ $alert = $_GET['alert'] ?? '';
                     <?php if ($forums && $forums->num_rows > 0): ?>
                         <?php while ($forum = $forums->fetch_assoc()): ?>
                             <?php
-                            $encodedAuthorId = base64_encode((string)$forum['author_id']);
-                            $encodedForumId = base64_encode((string)$forum['forum_id']);
+                            $authorId = (int)$forum['author_id'];
+                            $forumId = (int)$forum['forum_id'];
                             ?>
                             <div class="card">
                                 <div class="card_top">
@@ -113,23 +123,25 @@ $alert = $_GET['alert'] ?? '';
                                 </div>
                                 <p class="problem_statement"><?php echo $escape($forum['forum_desc']); ?></p>
                                 <div class="card_bottom">
-                                    <a href="forum.php?author_id=<?php echo rawurlencode($encodedAuthorId); ?>&forum_id=<?php echo rawurlencode($encodedForumId); ?>" class="explore_btn">Explore</a>
+                                    <a href="forum.php?author_id=<?php echo $authorId; ?>&forum_id=<?php echo $forumId; ?>" class="explore_btn">Explore</a>
                                     <?php if ($role === 'admin'): ?>
                                         <?php if ($forum['status'] === 'Pending'): ?>
-                                            <a href="../admin/forum_action.php?action=approve&amp;forum_id=<?php echo rawurlencode($encodedForumId); ?>" class="approve_btn">Approve</a>
+                                            <a href="../admin/forum_action.php?action=approve&amp;forum_id=<?php echo $forumId; ?>" class="approve_btn">Approve</a>
                                         <?php endif; ?>
-                                        <a href="../admin/forum_action.php?action=delete&amp;forum_id=<?php echo rawurlencode($encodedForumId); ?>" class="delete_btn">Delete</a>
+                                        <a href="../admin/forum_action.php?action=delete&amp;forum_id=<?php echo $forumId; ?>" class="delete_btn">Delete</a>
                                     <?php endif; ?>
                                     <span class="date"><?php echo $escape($forum['date']); ?></span>
                                 </div>
                             </div>
                         <?php endwhile; ?>
                     <?php else: ?>
-                        <div class="card">
+                        <div class="card empty_state">
                             <h2 class="problem_title">No forums found</h2>
                             <?php if ($role === 'agent'): ?>
                                 <p class="problem_statement">You have not created a forum yet.</p>
-                                <a href="../mentor/create_forum.php" class="explore_btn">Create a forum</a>
+                                <?php if ($agentProfileStatus === 'Approved'): ?>
+                                    <a href="../mentor/create_forum.php" class="explore_btn">Create a forum</a>
+                                <?php endif; ?>
                             <?php elseif ($role === 'admin'): ?>
                                 <p class="problem_statement">There are no forums for this selection.</p>
                             <?php else: ?>

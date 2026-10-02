@@ -81,7 +81,7 @@ if (!isset($_SESSION['id'])) {
                         $profile_image = !empty($row['profile_image']) ? '../../uploads/profiles/' . htmlspecialchars($row['profile_image']) : '../../public/assets/images/profile.png';
                         $agent_name = htmlspecialchars($row['first_name'] . ' ' . $row['last_name']);
                         echo '
-        <a href="inbox.php?user_id=' . base64_encode($row['id']) . '" class="mentor">
+        <a href="inbox.php?user_id=' . (int)$row['id'] . '" class="mentor">
             <div class="profile_image">
                 <img src="' . $profile_image . '" alt="' . $agent_name . '">
             </div>
@@ -126,7 +126,7 @@ if (!isset($_SESSION['id'])) {
                             $u = mysqli_fetch_assoc($u_result);
 
                             echo '
-        <a href="inbox.php?user_id=' . base64_encode($uid) . '" class="mentor">
+        <a href="inbox.php?user_id=' . (int)$uid . '" class="mentor">
          <div class="profile_image">
                         <img src="../../public/assets/images/profile.png" alt="">
                     </div>

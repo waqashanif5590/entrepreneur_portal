@@ -35,8 +35,12 @@ session_start();
             ?>
             <div class="profile_card profile_card_admin">
                 <?php
-                // check whether agent_account_id is set or not
-                $agent_account_id = base64_decode($_GET['agent_account_id']);
+                $rawAgentAccountId = $_GET['agent_account_id'] ?? null;
+                if (!is_string($rawAgentAccountId) || !preg_match('/\A[0-9]+\z/', $rawAgentAccountId) || (int)$rawAgentAccountId < 1 || (string)(int)$rawAgentAccountId !== ltrim($rawAgentAccountId, '0')) {
+                    http_response_code(400);
+                    exit('Invalid agent request.');
+                }
+                $agent_account_id = (int)$rawAgentAccountId;
                 $sql = "SELECT * FROM `profiles` WHERE agent_account_id = $agent_account_id";
 
                 $result = mysqli_query($conn, $sql);
@@ -49,7 +53,7 @@ session_start();
                 }
                 // $row = mysqli_fetch_assoc($result);
                 while ($row = mysqli_fetch_assoc($result)) {
-                    $agent_encoded_id = base64_encode($row["agent_account_id"]);
+                    $agent_account_id = (int)$row["agent_account_id"];
                     echo '
                
                 <div class="profile_header">
@@ -119,33 +123,30 @@ session_start();
                     $type_row = mysqli_fetch_assoc($type_result);
                     if ($type_row['entity_type'] == 'agent') {
                         echo
-                                '<a href="../mentor/update_profile.php?agent_account_id=' . $agent_encoded_id . '" class="approve_btn">Update Profile</a>
-                                <a href="../admin/delete_agent.php?agent_account_id=' . $agent_encoded_id . '" class="block_btn">Delete</a>
+                                '<a href="../mentor/update_profile.php?agent_account_id=' . $agent_account_id . '" class="approve_btn">Update Profile</a>
+                                <a href="../admin/delete_agent.php?agent_account_id=' . $agent_account_id . '" class="block_btn">Delete</a>
                             <a href="../mentor/agent_portal.php" class="back_btn">Back to Home</a>
                      </div>';
                     } else if ($type_row['entity_type'] == 'admin') {
                         if ($row["status"] == "Pending") {
                             echo
-                            '<a href="../admin/approve_agent.php?agent_account_id=' . $agent_encoded_id . '" class="approve_btn">Approve</a>
-                        <a href="../admin/delete_agent.php?agent_account_id=' . $agent_encoded_id . '" class="block_btn">Delete</a>
+                            '<a href="../admin/approve_agent.php?agent_account_id=' . $agent_account_id . '" class="approve_btn">Approve</a>
+                        <a href="../admin/delete_agent.php?agent_account_id=' . $agent_account_id . '" class="block_btn">Delete</a>
                      <a href="./agent_profiles.php" class="back_btn">Back to Agents</a>
                      </div>';
                         } else if ($row["status"] == "Approved") {
-                            $agent_account_id = base64_encode($row["agent_account_id"]);
-                                     echo ' <a href="../admin/block_agent.php?agent_account_id=' . $agent_encoded_id . '" class="block_btn">Block</a>
-                                 <a href="../admin/delete_agent.php?agent_account_id=' . $agent_encoded_id . '" class="block_btn">Delete</a>
+                                     echo ' <a href="../admin/block_agent.php?agent_account_id=' . $agent_account_id . '" class="block_btn">Block</a>
+                                 <a href="../admin/delete_agent.php?agent_account_id=' . $agent_account_id . '" class="block_btn">Delete</a>
                           <a href="./agent_profiles.php" class="back_btn">Back to Agents</a>
                 </div>';
                         } else if ($row["status"] == "Blocked") {
-                            $agent_account_id = base64_encode($row["agent_account_id"]);
-                                     echo '<a href="../admin/block_agent.php?agent_account_id=' . $agent_encoded_id . '" class="reject_btn">Unblock</a>
-                                 <a href="../admin/delete_agent.php?agent_account_id=' . $agent_encoded_id . '" class="block_btn">Delete</a>
+                                     echo '<a href="../admin/block_agent.php?agent_account_id=' . $agent_account_id . '" class="reject_btn">Unblock</a>
+                                 <a href="../admin/delete_agent.php?agent_account_id=' . $agent_account_id . '" class="block_btn">Delete</a>
                           <a href="./agent_profiles.php" class="back_btn">Back to Agents</a>
                           </div>';
                         } else if ($row["status"] == "Rejected") {
-                            $agent_account_id = base64_encode($row["agent_account_id"]);
-                            echo ' <a href="../admin/delete_agent.php?agent_account_id=' . $agent_encoded_id . '" class="block_btn">Delete</a>
-                        <a href="../admin/block_agent.php?agent_account_id=' . $agent_encoded_id . '" class="block_btn">Block</a>
+                            echo ' <a href="../admin/delete_agent.php?agent_account_id=' . $agent_account_id . '" class="block_btn">Delete</a>
+                        <a href="../admin/block_agent.php?agent_account_id=' . $agent_account_id . '" class="block_btn">Block</a>
                           <a href="./agent_profiles.php" class="back_btn">Back to Agents</a>
                           </div>';
                         }

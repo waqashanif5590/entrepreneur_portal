@@ -1,15 +1,15 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
-if (isset($_GET['author_id']) && isset($_GET['forum_id'])) {
-    $author_id = base64_decode($_GET['author_id'], true);
-    $forum_id = base64_decode($_GET['forum_id'], true);
-    if ($author_id === false || $forum_id === false || !ctype_digit($author_id) || !ctype_digit($forum_id)) {
-        die('Invalid request');
-    }
-} else {
-    die('Invalid request');
+ $rawAuthorId = $_GET['author_id'] ?? null;
+ $rawForumId = $_GET['forum_id'] ?? null;
+if (!is_string($rawAuthorId) || !preg_match('/\A[0-9]+\z/', $rawAuthorId) || (int)$rawAuthorId < 1 || (string)(int)$rawAuthorId !== ltrim($rawAuthorId, '0') ||
+    !is_string($rawForumId) || !preg_match('/\A[0-9]+\z/', $rawForumId) || (int)$rawForumId < 1 || (string)(int)$rawForumId !== ltrim($rawForumId, '0')) {
+    http_response_code(400);
+    exit('Invalid request');
 }
+$author_id = (int)$rawAuthorId;
+$forum_id = (int)$rawForumId;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -37,8 +37,6 @@ if (isset($_GET['author_id']) && isset($_GET['forum_id'])) {
                 $sql = "SELECT forums.*, CONCAT(accounts.first_name, ' ', accounts.last_name) AS author_name FROM forums INNER JOIN accounts ON accounts.id = forums.user_id WHERE forums.id=$forum_id AND forums.user_id=$author_id";
                 $result = mysqli_query($conn, $sql);
                 while ($row = mysqli_fetch_assoc($result)) {
-                    // $author_id = base64_encode($row["author_id"]);
-                    // $forum_id = base64_encode($row["forum_id"]);
                     echo '  <h2 class="problem_title"><strong>Title: </strong>' . $row["forum_title"] . '</h2>
                 <p class="problem_desc">' . $row["forum_desc"] . '</p>
                 <p class="author"><strong>Posted by: </strong>' . $row["author_name"] . '</p>
@@ -73,10 +71,8 @@ if (isset($_GET['author_id']) && isset($_GET['forum_id'])) {
             <div class="new_comment">
                 <h1>Share Your Opinion:</h1>
                 <?php
-                $encoded_author_id = base64_encode($author_id);
-                $encoded_forum_id = base64_encode($forum_id);
                 ?>
-                <form action="./forum.php?author_id=<?php echo $encoded_author_id; ?>&forum_id=<?php echo $encoded_forum_id; ?>" method="post">
+                <form action="./forum.php?author_id=<?php echo $author_id; ?>&forum_id=<?php echo $forum_id; ?>" method="post">
                     <div class="field">
                         <label for="comment">Write Comment</label>
                         <textarea name="comment" id="comment"></textarea>

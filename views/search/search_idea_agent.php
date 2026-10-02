@@ -58,8 +58,8 @@
                                         </div>';
                         }
                         while ($row = mysqli_fetch_assoc($result)) {
-                            $business_idea_id = base64_encode($row["id"]);
-                            $agent_profile_id = base64_encode($row["user_id"]);
+                            $business_idea_id = (int)$row["id"];
+                            $agent_profile_id = (int)$row["user_id"];
                             $agent_id = $_SESSION['id'];
                             $sql2 = "SELECT * FROM `profiles` WHERE agent_account_id='$agent_id'";
                             $result2 = mysqli_query($conn, $sql2);

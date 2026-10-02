@@ -1,6 +1,31 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
+
+if (empty($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true || empty($_SESSION['id'])) {
+    header('Location: ../auth/login_dashboard.php');
+    exit;
+}
+
+$accountId = (int)$_SESSION['id'];
+$profileStatement = $conn->prepare('SELECT status FROM profiles WHERE agent_account_id = ? LIMIT 1');
+$profileStatement->bind_param('i', $accountId);
+$profileStatement->execute();
+$agentProfile = $profileStatement->get_result()->fetch_assoc();
+$profileStatement->close();
+
+if (($agentProfile['status'] ?? null) !== 'Approved') {
+    if (($agentProfile['status'] ?? null) === 'Pending') {
+        $message = 'Your profile is pending for admin approval. Please wait for admin response';
+        header('Location: ../community/forum_list_shared.php?alert=' . urlencode($message));
+    } elseif ($agentProfile === null) {
+        header('Location: create_profile.php');
+    } else {
+        $message = 'Your profile must be approved by an admin before you can create a forum.';
+        header('Location: ../community/forum_list_shared.php?alert=' . urlencode($message));
+    }
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">

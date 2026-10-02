@@ -12,12 +12,19 @@ if (empty($_SESSION['loggedin']) || !in_array($account['entity_type'] ?? '', ['a
     exit('Access denied.');
 }
 if (isset($_GET['business_idea_id']) && isset($_GET['agent_profile_id'])) {
-    $business_idea_id = base64_decode($_GET['business_idea_id']);
-    $agent_profile_id = base64_decode($_GET['agent_profile_id']);
-    if (!is_numeric($business_idea_id) || !is_numeric($agent_profile_id)) {
-        die('Invalid request');
-    }
+    $rawIdeaId = $_GET['business_idea_id'];
+    $rawAgentAccountId = $_GET['agent_profile_id'];
+} else {
+    http_response_code(400);
+    exit('Invalid request');
 }
+if (!is_string($rawIdeaId) || !preg_match('/\A[0-9]+\z/', $rawIdeaId) || (int)$rawIdeaId < 1 || (string)(int)$rawIdeaId !== ltrim($rawIdeaId, '0') ||
+    !is_string($rawAgentAccountId) || !preg_match('/\A[0-9]+\z/', $rawAgentAccountId) || (int)$rawAgentAccountId < 1 || (string)(int)$rawAgentAccountId !== ltrim($rawAgentAccountId, '0')) {
+    http_response_code(400);
+    exit('Invalid request');
+}
+$business_idea_id = (int)$rawIdeaId;
+$agent_profile_id = (int)$rawAgentAccountId;
 ?>
 <?php
 if (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] == true) {
@@ -28,8 +35,6 @@ if (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] == true) {
          ('$review', '$user_id', '$business_idea_id', current_timestamp())";
         $result = mysqli_query($conn, $sql);
         if ($result) {
-            $business_idea_id = base64_encode($business_idea_id);
-            $agent_profile_id = base64_encode($agent_profile_id);
             $alert = "✅ Review submitted successfully";
             header("Location: ../ideas/idea_details.php?business_idea_id=$business_idea_id&agent_profile_id=$agent_profile_id&alert=" . urlencode($alert));
             exit();

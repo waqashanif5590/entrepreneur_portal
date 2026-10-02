@@ -10,19 +10,17 @@ if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] != true) {
 $logged_in_id = $_SESSION['id'];
 
 // Get and validate idea ID
-if (!isset($_GET['business_idea_id']) || empty($_GET['business_idea_id'])) {
-    die("Error: Business Idea ID is missing.");
-}
-
-$idea_id = base64_decode($_GET['business_idea_id']);
-
-if (!is_numeric($idea_id)) {
+$rawIdeaId = $_GET['business_idea_id'] ?? null;
+if (!is_string($rawIdeaId) || !preg_match('/\A[0-9]+\z/', $rawIdeaId) || (int)$rawIdeaId < 1 || (string)(int)$rawIdeaId !== ltrim($rawIdeaId, '0')) {
     die("Error: Invalid Idea ID.");
 }
+$idea_id = (int)$rawIdeaId;
 
 // ==================== FETCH EXISTING BUSINESS IDEA ====================
-$sql = "SELECT * FROM business_ideas WHERE id = '$idea_id' LIMIT 1";
-$result = mysqli_query($conn, $sql);
+$ideaStatement = $conn->prepare('SELECT * FROM business_ideas WHERE id = ? LIMIT 1');
+$ideaStatement->bind_param('i', $idea_id);
+$ideaStatement->execute();
+$result = $ideaStatement->get_result();
 
 if (!$result) {
     die("Database error: " . mysqli_error($conn));
@@ -32,10 +30,10 @@ if (mysqli_num_rows($result) == 0) {
     die("Business idea not found.");
 }
 
-$row = mysqli_fetch_assoc($result);
+$idea = mysqli_fetch_assoc($result);
 
 // Security: Verify that this idea belongs to the logged-in user
-if ($row['user_id'] != $logged_in_id) {
+if ($idea['user_id'] != $logged_in_id) {
     die("You do not have permission to edit this business idea.");
 }
 
@@ -98,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
     }
 }
 
-$cancel_url = '../ideas/idea_details.php?business_idea_id=' . base64_encode($idea_id) . '&agent_profile_id=' . base64_encode($row['user_id']);
+$cancel_url = '../ideas/idea_details.php?business_idea_id=' . $idea_id . '&agent_profile_id=' . (int)$idea['user_id'];
 ?>
 
 <!DOCTYPE html>
@@ -134,20 +132,20 @@ $cancel_url = '../ideas/idea_details.php?business_idea_id=' . base64_encode($ide
                 <div class="field_set">
                     <label>Business Idea Title *</label>
                     <input type="text" name="idea_title"
-                        value="<?= htmlspecialchars($row['idea_title'] ?? '') ?>" required>
+                        value="<?= htmlspecialchars($idea['idea_title'] ?? '') ?>" required>
                 </div>
 
                 <div class="row">
                     <div class="field_set">
                         <label>Category / Industry *</label>
                         <select name="idea_category" required>
-                            <option value="Technology" <?= ($row['idea_category'] ?? '') === 'Technology' ? 'selected' : '' ?>>Technology</option>
-                            <option value="Agriculture" <?= ($row['idea_category'] ?? '') === 'Agriculture' ? 'selected' : '' ?>>Agriculture</option>
-                            <option value="Health" <?= ($row['idea_category'] ?? '') === 'Health' ? 'selected' : '' ?>>Health</option>
-                            <option value="Education" <?= ($row['idea_category'] ?? '') === 'Education' ? 'selected' : '' ?>>Education</option>
-                            <option value="Retail" <?= ($row['idea_category'] ?? '') === 'Retail' ? 'selected' : '' ?>>Retail</option>
+                            <option value="Technology" <?= ($idea['idea_category'] ?? '') === 'Technology' ? 'selected' : '' ?>>Technology</option>
+                            <option value="Agriculture" <?= ($idea['idea_category'] ?? '') === 'Agriculture' ? 'selected' : '' ?>>Agriculture</option>
+                            <option value="Health" <?= ($idea['idea_category'] ?? '') === 'Health' ? 'selected' : '' ?>>Health</option>
+                            <option value="Education" <?= ($idea['idea_category'] ?? '') === 'Education' ? 'selected' : '' ?>>Education</option>
+                            <option value="Retail" <?= ($idea['idea_category'] ?? '') === 'Retail' ? 'selected' : '' ?>>Retail</option>
                             <option value="others"
-                                <?= !in_array(($row['idea_category'] ?? ''), ['Technology', 'Agriculture', 'Health', 'Education', 'Retail']) ? 'selected' : '' ?>>
+                                <?= !in_array(($idea['idea_category'] ?? ''), ['Technology', 'Agriculture', 'Health', 'Education', 'Retail']) ? 'selected' : '' ?>>
                                 Others
                             </option>
                         </select>
@@ -156,7 +154,7 @@ $cancel_url = '../ideas/idea_details.php?business_idea_id=' . base64_encode($ide
                     <div class="field_set">
                         <label>If Other Category</label>
                         <input type="text" name="other_category"
-                            value="<?= htmlspecialchars($row['idea_category'] ?? '') ?>"
+                            value="<?= htmlspecialchars($idea['idea_category'] ?? '') ?>"
                             placeholder="Type here if others">
                     </div>
                 </div>
@@ -164,67 +162,68 @@ $cancel_url = '../ideas/idea_details.php?business_idea_id=' . base64_encode($ide
                 <div class="field_set">
                     <label>Business Stage *</label>
                     <select name="idea_stage" required>
-                        <option value="Idea" <?= ($row['idea_stage'] ?? '') === 'Idea' ? 'selected' : '' ?>>Idea</option>
-                        <option value="Prototype" <?= ($row['idea_stage'] ?? '') === 'Prototype' ? 'selected' : '' ?>>Prototype</option>
-                        <option value="Early Stage" <?= ($row['idea_stage'] ?? '') === 'Early Stage' ? 'selected' : '' ?>>Early Stage</option>
-                        <option value="Growth" <?= ($row['idea_stage'] ?? '') === 'Growth' ? 'selected' : '' ?>>Growth</option>
-                        <option value="Scaling" <?= ($row['idea_stage'] ?? '') === 'Scaling' ? 'selected' : '' ?>>Scaling</option>
+                        <option value="Idea" <?= ($idea['idea_stage'] ?? '') === 'Idea' ? 'selected' : '' ?>>Idea</option>
+                        <option value="Prototype" <?= ($idea['idea_stage'] ?? '') === 'Prototype' ? 'selected' : '' ?>>Prototype</option>
+                        <option value="Early Stage" <?= ($idea['idea_stage'] ?? '') === 'Early Stage' ? 'selected' : '' ?>>Early Stage</option>
+                        <option value="Growth" <?= ($idea['idea_stage'] ?? '') === 'Growth' ? 'selected' : '' ?>>Growth</option>
+                        <option value="Scaling" <?= ($idea['idea_stage'] ?? '') === 'Scaling' ? 'selected' : '' ?>>Scaling</option>
                     </select>
                 </div>
 
                 <div class="field_set">
                     <label>Problem Statement *</label>
-                    <textarea name="problem" required><?= htmlspecialchars($row['problem_statement'] ?? '') ?></textarea>
+                    <textarea name="problem" required><?= htmlspecialchars($idea['problem_statement'] ?? '') ?></textarea>
                 </div>
 
                 <div class="field_set">
                     <label>Proposed Solution *</label>
-                    <textarea name="solution" required><?= htmlspecialchars($row['problem_solution'] ?? '') ?></textarea>
+                    <textarea name="solution" required><?= htmlspecialchars($idea['problem_solution'] ?? '') ?></textarea>
                 </div>
 
                 <div class="field_set">
                     <label>Unique Value Proposition *</label>
-                    <textarea name="value" required><?= htmlspecialchars($row['proposition_value'] ?? '') ?></textarea>
+                    <textarea name="value" required><?= htmlspecialchars($idea['proposition_value'] ?? '') ?></textarea>
                 </div>
 
                 <div class="field_set">
                     <label>Target Market / Customer Segment *</label>
-                    <textarea name="target_market" required><?= htmlspecialchars($row['target_market'] ?? '') ?></textarea>
+                    <textarea name="target_market" required><?= htmlspecialchars($idea['target_market'] ?? '') ?></textarea>
                 </div>
 
                 <div class="field_set">
                     <label>Market Size (Optional)</label>
                     <input type="text" name="market_size"
-                        value="<?= htmlspecialchars($row['market_size'] ?? '') ?>">
+                        value="<?= htmlspecialchars($idea['market_size'] ?? '') ?>">
                 </div>
 
                 <div class="field_set">
                     <label>Business Model *</label>
-                    <textarea name="model" required><?= htmlspecialchars($row['business_model'] ?? '') ?></textarea>
+                    <p class="info_text">Describe how your business will generate revenue and sustain itself.</p>
+                    <textarea name="model" required><?= htmlspecialchars($idea['business_model'] ?? '') ?></textarea>
                 </div>
 
                 <div class="field_set">
                     <label>Required Resources (Optional)</label>
-                    <textarea name="resources"><?= htmlspecialchars($row['resources'] ?? '') ?></textarea>
+                    <textarea name="resources"><?= htmlspecialchars($idea['resources'] ?? '') ?></textarea>
                 </div>
 
                 <div class="field_set">
                     <label>Expected Outcomes (Optional)</label>
-                    <textarea name="outcomes"><?= htmlspecialchars($row['outcomes'] ?? '') ?></textarea>
+                    <textarea name="outcomes"><?= htmlspecialchars($idea['outcomes'] ?? '') ?></textarea>
                 </div>
 
                 <div class="field_set">
                     <label>Keywords / Tags</label>
                     <input type="text" name="keywords"
-                        value="<?= htmlspecialchars($row['keywords'] ?? '') ?>">
+                        value="<?= htmlspecialchars($idea['keywords'] ?? '') ?>">
                 </div>
 
                 <div class="field_set">
                     <label>Visibility *</label>
                     <select name="visibility" required>
-                        <option value="Public" <?= ($row['visibility'] ?? '') === 'Public' ? 'selected' : '' ?>>Public</option>
-                        <option value="Private" <?= ($row['visibility'] ?? '') === 'Private' ? 'selected' : '' ?>>Private</option>
-                        <option value="Mentors Only" <?= ($row['visibility'] ?? '') === 'Mentors Only' ? 'selected' : '' ?>>Mentors Only</option>
+                        <option value="Public" <?= ($idea['visibility'] ?? '') === 'Public' ? 'selected' : '' ?>>Public</option>
+                        <option value="Private" <?= ($idea['visibility'] ?? '') === 'Private' ? 'selected' : '' ?>>Private</option>
+                        <option value="Mentors Only" <?= ($idea['visibility'] ?? '') === 'Mentors Only' ? 'selected' : '' ?>>Mentors Only</option>
                     </select>
                 </div>
 

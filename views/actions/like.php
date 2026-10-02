@@ -7,7 +7,12 @@ if (!isset($_SESSION['id'])) {
     exit();
 }
 
-$agent_profile_id = $_GET['agent_profile_id'];
+$rawAgentAccountId = $_GET['agent_profile_id'] ?? null;
+if (!is_string($rawAgentAccountId) || !preg_match('/\A[0-9]+\z/', $rawAgentAccountId) || (int)$rawAgentAccountId < 1 || (string)(int)$rawAgentAccountId !== ltrim($rawAgentAccountId, '0')) {
+    http_response_code(400);
+    exit('Invalid agent request.');
+}
+$agent_profile_id = (int)$rawAgentAccountId;
 $user_id = $_SESSION['id'];
 
 function redirect_back($agent_profile_id, $alert) {
@@ -16,7 +21,7 @@ function redirect_back($agent_profile_id, $alert) {
         $separator = strpos($ref, '?') !== false ? '&' : '?';
         header('Location: ' . $ref . $separator . 'alert=' . urlencode($alert));
     } else {
-        header('Location: ../profiles/selected_agent_ideas.php?agent_profile_id=' . base64_encode($agent_profile_id) . '&alert=' . urlencode($alert));
+        header('Location: ../profiles/selected_agent_ideas.php?agent_profile_id=' . $agent_profile_id . '&alert=' . urlencode($alert));
     }
     exit();
 }
@@ -41,8 +46,6 @@ $sql = "UPDATE engagement_stats
         WHERE agent_profile_id='$agent_profile_id'";
 
 mysqli_query($conn, $sql);
-$encoded_id = base64_encode($agent_profile_id);
-
 $search_sql = "SELECT * FROM `profiles` WHERE agent_account_id='$agent_profile_id'";
 $result = mysqli_query($conn, $search_sql);
 $row = mysqli_fetch_assoc($result);

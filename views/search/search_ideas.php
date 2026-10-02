@@ -102,7 +102,7 @@
                             <td><span>' . $row["idea_title"] . '</span></td>
                             <td>' . $field_expertise . '</td>
                             <td><span class="badge ' . $row["status"] . '">' . $row["status"] . '</span></td>
-                            <td><a href="../ideas/idea_details.php?agent_profile_id=' . base64_encode($agent_id) . '&business_idea_id=' . base64_encode($business_idea_id) . '">View</a></td>
+                            <td><a href="../ideas/idea_details.php?agent_profile_id=' . (int)$agent_id . '&business_idea_id=' . (int)$business_idea_id . '">View</a></td>
                         </tr>';
                             }
 

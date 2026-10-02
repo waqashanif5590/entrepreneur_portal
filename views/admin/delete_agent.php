@@ -1,11 +1,12 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
-$agent_account_id = base64_decode($_GET['agent_account_id'] ?? '', true);
-if ($agent_account_id === false || !ctype_digit($agent_account_id)) {
+$rawAgentAccountId = $_GET['agent_account_id'] ?? null;
+if (!is_string($rawAgentAccountId) || !preg_match('/\A[0-9]+\z/', $rawAgentAccountId) || (int)$rawAgentAccountId < 1 || (string)(int)$rawAgentAccountId !== ltrim($rawAgentAccountId, '0')) {
     http_response_code(400);
     exit('Invalid request.');
 }
+$agent_account_id = (int)$rawAgentAccountId;
 
 // Fetch file paths before deleting the profile
 $sql_fetch = "SELECT profile_image, cnic, resume, certificate FROM `profiles` WHERE agent_account_id=" . (int)$agent_account_id;

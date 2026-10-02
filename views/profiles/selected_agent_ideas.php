@@ -1,12 +1,12 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
-if (isset($_GET['agent_profile_id'])) {
-    $agent_profile_id = base64_decode($_GET['agent_profile_id']);
-    if (!is_numeric($agent_profile_id)) {
-        die('Invalid request');
-    }
+ $rawAgentAccountId = $_GET['agent_profile_id'] ?? null;
+if (!is_string($rawAgentAccountId) || !preg_match('/\A[0-9]+\z/', $rawAgentAccountId) || (int)$rawAgentAccountId < 1 || (string)(int)$rawAgentAccountId !== ltrim($rawAgentAccountId, '0')) {
+    http_response_code(400);
+    exit('Invalid agent request.');
 }
+$agent_profile_id = (int)$rawAgentAccountId;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -203,17 +203,15 @@ if (isset($_GET['agent_profile_id'])) {
                     </div>';
                 }
                 while ($row = mysqli_fetch_assoc($result)) {
-                    $business_idea_id = base64_encode($row["id"]);
-                    $agent_profile_id = base64_encode($row["user_id"]);
                     $sql = "SELECT entity_type FROM `accounts` WHERE id='$user_id'";
                     $result_entity = mysqli_query($conn, $sql);
                     $entity_type = mysqli_fetch_assoc($result_entity)['entity_type'];
                     if ($entity_type == 'user') {
-                        $link_to_page = "../ideas/idea_details.php?business_idea_id=' . $business_idea_id . '&agent_profile_id=' . $agent_profile_id . '";
+                        $link_to_page = '../ideas/idea_details.php?business_idea_id=' . (int)$row['id'] . '&agent_profile_id=' . (int)$row['user_id'];
                     } else if ($entity_type == 'agent') {
-                        $link_to_page = "../ideas/idea_details.php?business_idea_id=' . $business_idea_id . '&agent_profile_id=' . $agent_profile_id . '";
+                        $link_to_page = '../ideas/idea_details.php?business_idea_id=' . (int)$row['id'] . '&agent_profile_id=' . (int)$row['user_id'];
                     } else {
-                        $link_to_page = "../ideas/idea_details.php?business_idea_id=' . $business_idea_id . '&agent_profile_id=' . $agent_profile_id . '";
+                        $link_to_page = '../ideas/idea_details.php?business_idea_id=' . (int)$row['id'] . '&agent_profile_id=' . (int)$row['user_id'];
                     }
                     echo ' <div class="card">
                         <h2>' . $row["idea_title"] . '</h2>

@@ -165,15 +165,15 @@ require_once __DIR__ . '/../../config/database.php';
                                 } else {
                                     // Yet busines table is not created so we are showing dummy data for now, once business table is created we will fetch data from there and show here
                                     while ($row = mysqli_fetch_assoc($result)) {
-                                        $business_idea_id = base64_encode($row["id"]);
-                                        $agent_profile_id = base64_encode($row["user_id"]);
+                                        $business_idea_id = (int)$row["id"];
+                                        $agent_profile_id = (int)$row["user_id"];
                                         echo ' <div class="card">
                                         <h2>' . $row["idea_title"] . '</h2>
                                         <p>' . $row["problem_statement"] . '</p>
                                         <div class="buttons">
                                         <a href="../ideas/idea_details.php?business_idea_id=' . $business_idea_id . '&agent_profile_id=' . $agent_profile_id . '" class="explore_btn">Explore</a>
                                         <a href="./update_idea.php?business_idea_id=' . $business_idea_id . '&agent_profile_id=' . $agent_profile_id . '" class="edit_idea">Edit</a>
-                                        <a href="./delete_idea.php?business_idea_id=' . $business_idea_id . '&agent_profile_id=' . $agent_profile_id . '" class="delete_idea">Delete</a>
+                                        <a href="../admin/delete_idea.php?business_idea_id=' . $business_idea_id . '&agent_profile_id=' . $agent_profile_id . '" class="delete_idea">Delete</a>
                                         <p class="status status_' . $row["status"] . '">' . $row["status"] . '</p>
                                         </div>
                                         </div>';

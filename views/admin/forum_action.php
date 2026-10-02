@@ -18,11 +18,12 @@ if (($account['entity_type'] ?? '') !== 'admin') {
 }
 
 $action = $_GET['action'] ?? '';
-$forumId = base64_decode($_GET['forum_id'] ?? '', true);
-if (!in_array($action, ['approve', 'delete'], true) || $forumId === false || !ctype_digit($forumId)) {
+$rawForumId = $_GET['forum_id'] ?? null;
+if (!in_array($action, ['approve', 'delete'], true) || !is_string($rawForumId) || !preg_match('/\A[0-9]+\z/', $rawForumId) || (int)$rawForumId < 1 || (string)(int)$rawForumId !== ltrim($rawForumId, '0')) {
     http_response_code(400);
     exit('Invalid request.');
 }
+$forumId = (int)$rawForumId;
 
 if ($action === 'approve') {
     $statement = $conn->prepare("UPDATE forums SET status = 'Approved' WHERE id = ? AND status = 'Pending'");

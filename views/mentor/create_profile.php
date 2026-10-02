@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
         $certificate_path = '';
 
         // Function to handle file upload
-        function uploadFile($fileInputName, $allowedTypes, $maxSizeMB = 2, $upload_dir)
+        function uploadFile($fileInputName, $allowedTypes, $upload_dir, $maxSizeMB = 2)
         {
             if (!isset($_FILES[$fileInputName]) || $_FILES[$fileInputName]['error'] !== UPLOAD_ERR_OK) {
                 return ['success' => false, 'message' => "File $fileInputName upload error"];
@@ -80,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
         }
 
         // 1. Profile Picture (Image only)
-        $imgResult = uploadFile('profile_pic', ['jpg', 'jpeg', 'png', 'gif'], 2, $upload_dir);
+        $imgResult = uploadFile('profile_pic', ['jpg', 'jpeg', 'png', 'gif'], $upload_dir, 2);
         if ($imgResult['success']) {
             $profile_image = $imgResult['path'];
         } else {
@@ -89,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 
         // 2. Resume (PDF or DOCX)
         if (empty($alert)) {
-            $resumeResult = uploadFile('resume', ['pdf', 'docx'], 2, $upload_dir);
+            $resumeResult = uploadFile('resume', ['pdf', 'docx'], $upload_dir, 2);
             if ($resumeResult['success']) {
                 $resume_path = $resumeResult['path'];
             } else {
@@ -99,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 
         // 3. Experience Certificates (Optional)
         if (empty($alert) && !empty($_FILES['documents']['name'])) {
-            $certResult = uploadFile('documents', ['pdf', 'docx'], 2, $upload_dir);
+            $certResult = uploadFile('documents', ['pdf', 'docx'], $upload_dir, 2);
             if ($certResult['success']) {
                 $certificate_path = $certResult['path'];
             } else {

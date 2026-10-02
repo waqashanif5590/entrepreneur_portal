@@ -67,14 +67,14 @@ $escape = static fn($value) => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF
                         <tbody>
                             <?php if ($profiles->num_rows > 0): ?>
                                 <?php while ($profile = $profiles->fetch_assoc()): ?>
-                                    <?php $encodedId = base64_encode((string)$profile['agent_account_id']); ?>
+                                    <?php $agentAccountId = (int)$profile['agent_account_id']; ?>
                                     <tr>
                                         <td><img src="../../uploads/profiles/<?php echo rawurlencode($profile['profile_image']); ?>" class="table_profile" alt="Profile"></td>
                                         <td><?php echo $escape($profile['agent_f_name'] . ' ' . $profile['agent_l_name']); ?></td>
                                         <td><?php echo $escape($profile['agent_email']); ?></td>
                                         <td><span class="badge <?php echo $escape($profile['status']); ?>"><?php echo $escape($profile['status']); ?></span></td>
                                         <td><?php echo $escape($profile['field_expertise']); ?></td>
-                                        <td><a href="selected_agent.php?agent_account_id=<?php echo rawurlencode($encodedId); ?>">View</a></td>
+                                        <td><a href="selected_agent.php?agent_account_id=<?php echo $agentAccountId; ?>">View</a></td>
                                     </tr>
                                 <?php endwhile; ?>
                             <?php else: ?>
@@ -88,7 +88,7 @@ $escape = static fn($value) => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF
                     <div class="mentors_card_container">
                         <?php if ($profiles->num_rows > 0): ?>
                             <?php while ($profile = $profiles->fetch_assoc()): ?>
-                                <?php $encodedId = base64_encode((string)$profile['agent_account_id']); ?>
+                                <?php $agentAccountId = (int)$profile['agent_account_id']; ?>
                                 <div class="mentors_card">
                                     <div class="mentor">
                                         <div class="mentor_icon"><img src="../../uploads/profiles/<?php echo rawurlencode($profile['profile_image']); ?>" alt=""></div>
@@ -97,7 +97,7 @@ $escape = static fn($value) => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF
                                             <p><?php echo $escape($profile['field_expertise']); ?></p>
                                         </div>
                                     </div>
-                                    <a href="selected_agent_ideas.php?agent_profile_id=<?php echo rawurlencode($encodedId); ?>">Explore</a>
+                                    <a href="selected_agent_ideas.php?agent_profile_id=<?php echo $agentAccountId; ?>">Explore</a>
                                 </div>
                             <?php endwhile; ?>
                         <?php else: ?>

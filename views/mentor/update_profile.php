@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
         $certificate_path = $profile['certificate'];
 
         // Reuse the same uploadFile function
-        function uploadFile($fileInputName, $allowedTypes, $maxSizeMB = 2, $upload_dir)
+        function uploadFile($fileInputName, $allowedTypes, $upload_dir, $maxSizeMB = 2)
         {
             if (!isset($_FILES[$fileInputName]) || $_FILES[$fileInputName]['error'] !== UPLOAD_ERR_OK) {
                 return ['success' => false, 'message' => "No new file uploaded"];
@@ -86,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 
         // 1. Profile Picture (Optional - only update if new file selected)
         if (!empty($_FILES['profile_pic']['name'])) {
-            $imgResult = uploadFile('profile_pic', ['jpg', 'jpeg', 'png', 'gif'], 2, $upload_dir);
+            $imgResult = uploadFile('profile_pic', ['jpg', 'jpeg', 'png', 'gif'], $upload_dir, 2);
             if ($imgResult['success']) {
                 $profile_image = $imgResult['path'];
                 // Optional: Delete old image file here if you want
@@ -97,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 
         // 2. CNIC (Optional)
         if (empty($alert) && !empty($_FILES['cnic']['name'])) {
-            $cnicResult = uploadFile('cnic', ['jpg', 'jpeg', 'png', 'gif'], 2, $upload_dir);
+            $cnicResult = uploadFile('cnic', ['jpg', 'jpeg', 'png', 'gif'], $upload_dir, 2);
             if ($cnicResult['success']) {
                 $cnic_path = $cnicResult['path'];
             } else {
@@ -107,7 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 
         // 3. Resume (Optional)
         if (empty($alert) && !empty($_FILES['resume']['name'])) {
-            $resumeResult = uploadFile('resume', ['pdf', 'docx'], 2, $upload_dir);
+            $resumeResult = uploadFile('resume', ['pdf', 'docx'], $upload_dir, 2);
             if ($resumeResult['success']) {
                 $resume_path = $resumeResult['path'];
             } else {
@@ -117,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 
         // 4. Experience Certificates (Optional)
         if (empty($alert) && !empty($_FILES['documents']['name'])) {
-            $certResult = uploadFile('documents', ['pdf', 'docx'], 2, $upload_dir);
+            $certResult = uploadFile('documents', ['pdf', 'docx'], $upload_dir, 2);
             if ($certResult['success']) {
                 $certificate_path = $certResult['path'];
             } else {
