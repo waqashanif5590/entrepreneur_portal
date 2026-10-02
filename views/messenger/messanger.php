@@ -1,10 +1,45 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
-
-if (!isset($_SESSION['id'])) {
-    die("Login required");
+require_once __DIR__ . '/../../config/security.php';
+$type = requireAccountRole($conn, ['user', 'agent']);
+$my_id = (int)$_SESSION['id'];
+$search = $_GET['q'] ?? '';
+if (!is_string($search)) {
+    http_response_code(400);
+    exit('Invalid search query.');
 }
+$search = trim($search);
+$pattern = '%' . $search . '%';
+if ($type === 'user') {
+    $sql = "SELECT a.id, a.first_name, a.last_name, p.profile_image
+            FROM accounts a JOIN profiles p ON a.id = p.agent_account_id
+            WHERE a.entity_type = 'agent' AND a.status <> 'Blocked' AND p.status = 'Approved'";
+    if ($search !== '') {
+        $sql .= ' AND (a.first_name LIKE ? OR a.last_name LIKE ?)';
+        $statement = $conn->prepare($sql . ' ORDER BY a.first_name, a.last_name');
+        $statement->bind_param('ss', $pattern, $pattern);
+    } else {
+        $statement = $conn->prepare($sql . ' ORDER BY a.first_name, a.last_name');
+    }
+} else {
+    $sql = "SELECT DISTINCT a.id, a.first_name, a.last_name
+            FROM accounts a JOIN messages m ON
+                (m.sender_id = a.id AND m.receiver_id = ?) OR
+                (m.sender_id = ? AND m.receiver_id = a.id)
+            WHERE a.entity_type = 'user' AND a.status <> 'Blocked'";
+    if ($search !== '') {
+        $sql .= ' AND (a.first_name LIKE ? OR a.last_name LIKE ?)';
+        $statement = $conn->prepare($sql . ' ORDER BY a.first_name, a.last_name');
+        $statement->bind_param('iiss', $my_id, $my_id, $pattern, $pattern);
+    } else {
+        $statement = $conn->prepare($sql . ' ORDER BY a.first_name, a.last_name');
+        $statement->bind_param('ii', $my_id, $my_id);
+    }
+}
+$statement->execute();
+$contacts = $statement->get_result();
+$escape = static fn($value) => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 ?>
 <!DOCTYPE html> 
 <html lang="en">
@@ -34,110 +69,32 @@ if (!isset($_SESSION['id'])) {
             <div class="search_bar">
                 <form action="" method="get">
                     <input type="text" name="q" id="search" placeholder="Search mentors or users"
-                        value="<?php echo isset($_GET['q']) ? htmlspecialchars($_GET['q']) : ''; ?>">
+                        value="<?php echo $escape($search); ?>">
                     <button id="search_button"><i class="fas fa-search"></i></button>
                 </form>
             </div>
 
-            <?php
-
-
-            $my_id = $_SESSION['id'];
-
-            // Get my account type
-            $q = mysqli_query($conn, "SELECT entity_type FROM accounts WHERE id='$my_id'");
-            $me = mysqli_fetch_assoc($q);
-            $type = $me['entity_type'];
-
-            // Get search term
-            $search = "";
-            if (isset($_GET['q']) && trim($_GET['q']) != "") {
-                $search = mysqli_real_escape_string($conn, trim($_GET['q']));
-            }
-            ?>
-
             <div class="mentors_container">
 
                 <?php
-                /* ==============================
-   IF USER → SHOW ALL AGENTS
-================================*/
-                if ($type == 'user') {
-
-                    $sql = "SELECT a.id, a.first_name, a.last_name, p.profile_image 
-            FROM accounts a
-            JOIN profiles p ON a.id = p.agent_account_id
-            WHERE a.entity_type='agent' AND p.status='Approved'";
-
-                    if ($search != "") {
-                        $sql .= " AND (a.first_name LIKE '%$search%' 
-                  OR a.last_name LIKE '%$search%')";
-                    }
-
-                    $result = mysqli_query($conn, $sql);
-                    $found = false;
-                    while ($row = mysqli_fetch_assoc($result)) {
-                        $found = true;
-                        $profile_image = !empty($row['profile_image']) ? '../../uploads/profiles/' . htmlspecialchars($row['profile_image']) : '../../public/assets/images/profile.png';
-                        $agent_name = htmlspecialchars($row['first_name'] . ' ' . $row['last_name']);
-                        echo '
+                $found = false;
+                while ($row = $contacts->fetch_assoc()) {
+                    $found = true;
+                    $contactId = (int)$row['id'];
+                    $profile_image = $type === 'user' && !empty($row['profile_image']) ? '../profiles/profile_image.php?agent_account_id=' . $contactId : '../../public/assets/images/profile.png';
+                    $agent_name = $escape($row['first_name'] . ' ' . $row['last_name']);
+                    echo '
         <a href="inbox.php?user_id=' . (int)$row['id'] . '" class="mentor">
             <div class="profile_image">
                 <img src="' . $profile_image . '" alt="' . $agent_name . '">
             </div>
             <p class="mentor_name">' . $agent_name . '</p>
         </a>';
-                    }
-                    if (!$found) {
-                        echo '<p>No agents found</p>';
-                    }
                 }
-
-                /* ====================================
-   IF AGENT → SHOW USERS WHO MESSAGED HIM
-=====================================*/
-                if ($type == 'agent') {
-
-                    $sql = "SELECT DISTINCT sender_id 
-            FROM messages 
-            WHERE receiver_id='$my_id'";
-
-                    $result = mysqli_query($conn, $sql);
-
-                    $found = false;
-                    while ($r = mysqli_fetch_assoc($result)) {
-
-                        $uid = $r['sender_id'];
-
-                        $user_sql = "SELECT id, first_name, last_name 
-                     FROM accounts 
-                     WHERE id='$uid'";
-
-                        if ($search != "") {
-                            $user_sql .= " AND (first_name LIKE '%$search%' 
-                          OR last_name LIKE '%$search%')";
-                        }
-
-                        $u_result = mysqli_query($conn, $user_sql);
-
-                        if (mysqli_num_rows($u_result) > 0) {
-
-                            $found = true;
-                            $u = mysqli_fetch_assoc($u_result);
-
-                            echo '
-        <a href="inbox.php?user_id=' . (int)$uid . '" class="mentor">
-         <div class="profile_image">
-                        <img src="../../public/assets/images/profile.png" alt="">
-                    </div>
-            <p class="mentor_name">' . $u['first_name'] . ' ' . $u['last_name'] . '</p>
-        </a>';
-                        }
-                    }
-                    if (!$found) {
-                        echo "<p>No users found</p>";
-                    }
+                if (!$found) {
+                    echo $type === 'user' ? '<p>No agents found</p>' : '<p>No users found</p>';
                 }
+                $statement->close();
                 ?>
 
             </div>

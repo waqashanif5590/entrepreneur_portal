@@ -1,29 +1,16 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
-if (empty($_SESSION['loggedin']) || empty($_SESSION['id'])) {
-    http_response_code(403);
-    exit('Access denied.');
-}
+require_once __DIR__ . '/../../config/security.php';
 
-$accountId = (int)$_SESSION['id'];
-$roleStatement = $conn->prepare('SELECT entity_type FROM accounts WHERE id = ?');
-$roleStatement->bind_param('i', $accountId);
-$roleStatement->execute();
-$account = $roleStatement->get_result()->fetch_assoc();
-$roleStatement->close();
-$role = $account['entity_type'] ?? '';
-if (!in_array($role, ['admin', 'agent'], true)) {
-    http_response_code(403);
-    exit('Access denied.');
-}
-
-$rawIdeaId = $_GET['business_idea_id'] ?? null;
-if (!is_string($rawIdeaId) || !preg_match('/\A[0-9]+\z/', $rawIdeaId) || (int)$rawIdeaId < 1 || (string)(int)$rawIdeaId !== ltrim($rawIdeaId, '0')) {
+$role = requireAccountRole($conn, ['admin', 'agent']);
+requirePostCsrfToken();
+$ideaId = requestPositiveId($_POST['business_idea_id'] ?? null);
+if ($ideaId === null) {
     http_response_code(400);
     exit('Invalid request.');
 }
-$ideaId = (int)$rawIdeaId;
+$accountId = (int)$_SESSION['id'];
 
 $ideaStatement = $conn->prepare('SELECT user_id FROM business_ideas WHERE id = ? LIMIT 1');
 $ideaStatement->bind_param('i', $ideaId);
@@ -38,21 +25,19 @@ if (!$idea || ($role === 'agent' && (int)$idea['user_id'] !== $accountId)) {
 $conn->begin_transaction();
 $reviewsStatement = $conn->prepare('DELETE FROM reviews WHERE business_idea_id = ?');
 $reviewsStatement->bind_param('i', $ideaId);
+$reviewsDeleted = $reviewsStatement->execute();
+$reviewsStatement->close();
 $ideaDeleteStatement = $conn->prepare('DELETE FROM business_ideas WHERE id = ?');
 $ideaDeleteStatement->bind_param('i', $ideaId);
-if (!$reviewsStatement->execute() || !$ideaDeleteStatement->execute()) {
+$ideaDeleted = $ideaDeleteStatement->execute();
+$ideaDeleteStatement->close();
+if (!$reviewsDeleted || !$ideaDeleted) {
     $conn->rollback();
     http_response_code(500);
     exit('Unable to delete idea.');
 }
 $conn->commit();
-$reviewsStatement->close();
-$ideaDeleteStatement->close();
 
 $alert = 'Idea deleted successfully';
-if ($role === 'admin') {
-    header('Location: ../ideas/ideas_list.php?alert=' . urlencode($alert));
-} else {
-    header('Location: ../mentor/agent_portal.php?alert=' . urlencode($alert));
-}
+header('Location: ' . ($role === 'admin' ? '../ideas/ideas_list.php' : '../mentor/agent_portal.php') . '?alert=' . urlencode($alert));
 exit();

@@ -3,7 +3,10 @@
 
 session_start();
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../config/security.php';
 
+requireAccountRole($conn, ['agent']);
+$csrfToken = csrfToken();
 if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
     header("Location: ../auth/login_dashboard.php");
     exit;
@@ -17,20 +20,22 @@ $isSelected = static fn(string $key, string $value): string => (($oldInput[$key]
 
 if ($_SERVER['REQUEST_METHOD'] == "POST") {
     $alert = '';
+    requirePostCsrfToken();
 
-    $firstname     = mysqli_real_escape_string($conn, $_POST["firstname"]);
-    $lastname      = mysqli_real_escape_string($conn, $_POST["lastname"]);
-    $dob           = mysqli_real_escape_string($conn, $_POST["dob"]);
-    $country       = mysqli_real_escape_string($conn, $_POST["country"]);
-    $city          = mysqli_real_escape_string($conn, $_POST["city"]);
-    $contact       = mysqli_real_escape_string($conn, $_POST["contact"]);
-    $email         = mysqli_real_escape_string($conn, $_POST["email"]);
-    $field         = mysqli_real_escape_string($conn, $_POST["field"]);
-    $organization  = mysqli_real_escape_string($conn, $_POST["organization"]);
-    $experience    = (int)$_POST["experience"];
-    $bio           = mysqli_real_escape_string($conn, $_POST["bio"]);
-    $personal_web  = mysqli_real_escape_string($conn, $_POST["personal_web"]);
-    $agent_account_id = $_SESSION['id'];
+    $firstname     = (string)$_SESSION['firstname'];
+    $lastname      = (string)$_SESSION['lastname'];
+    $dob           = trim($_POST["dob"] ?? '');
+    $country       = trim($_POST["country"] ?? '');
+    $city          = trim($_POST["city"] ?? '');
+    $contact       = trim($_POST["contact"] ?? '');
+    $email         = (string)$_SESSION['email'];
+    $field         = trim($_POST["field"] ?? '');
+    $organization  = trim($_POST["organization"] ?? '');
+    $experience    = filter_var($_POST["experience"] ?? 0, FILTER_VALIDATE_INT);
+    $experience = $experience === false ? 0 : $experience;
+    $bio           = trim($_POST["bio"] ?? '');
+    $personal_web  = trim($_POST["personal_web"] ?? '');
+    $agent_account_id = (int)$_SESSION['id'];
 
     // Validation
     if ($country == 'none' || $field == 'none' || empty($dob) || empty($city) || empty($contact)) {
@@ -43,6 +48,10 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
         // Create directory if not exists
         if (!is_dir($upload_dir)) {
             mkdir($upload_dir, 0755, true);
+        }
+        $private_upload_dir = dirname(__DIR__, 2) . '/storage/private_profiles/';
+        if (!is_dir($private_upload_dir) && !mkdir($private_upload_dir, 0750, true) && !is_dir($private_upload_dir)) {
+            $alert = '❌ Unable to prepare secure document storage.';
         }
 
         $profile_image = '';
@@ -89,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 
         // 2. Resume (PDF or DOCX)
         if (empty($alert)) {
-            $resumeResult = uploadFile('resume', ['pdf', 'docx'], $upload_dir, 2);
+            $resumeResult = uploadFile('resume', ['pdf', 'docx'], $private_upload_dir, 2);
             if ($resumeResult['success']) {
                 $resume_path = $resumeResult['path'];
             } else {
@@ -99,7 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 
         // 3. Experience Certificates (Optional)
         if (empty($alert) && !empty($_FILES['documents']['name'])) {
-            $certResult = uploadFile('documents', ['pdf', 'docx'], $upload_dir, 2);
+            $certResult = uploadFile('documents', ['pdf', 'docx'], $private_upload_dir, 2);
             if ($certResult['success']) {
                 $certificate_path = $certResult['path'];
             } else {
@@ -109,24 +118,18 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 
         // ====================== INSERT INTO DATABASE ======================
         if (empty($alert)) {
-            $sql = "INSERT INTO `profiles` 
-                    (agent_f_name, agent_l_name, dob, country, city, contact, agent_email, 
-                     field_expertise, org_name, experience, agent_weblink, agent_bio, 
-                     agent_account_id, profile_image, resume, certificate, status) 
-                    VALUES 
-                    ('$firstname', '$lastname', '$dob', '$country', '$city', '$contact', '$email', 
-                     '$field', '$organization', $experience, '$personal_web', '$bio', 
-                     $agent_account_id, '$profile_image', '$resume_path', 
-                     '$certificate_path', 'Pending')";
-
-            $result = mysqli_query($conn, $sql);
+            $statement = $conn->prepare("INSERT INTO profiles (agent_f_name, agent_l_name, dob, country, city, contact, agent_email, field_expertise, org_name, experience, agent_weblink, agent_bio, agent_account_id, profile_image, resume, certificate, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')");
+            $statement->bind_param('sssssssssississs', $firstname, $lastname, $dob, $country, $city, $contact, $email, $field, $organization, $experience, $personal_web, $bio, $agent_account_id, $profile_image, $resume_path, $certificate_path);
+            $result = $statement->execute();
+            $statement->close();
 
             if ($result) {
                 $alert = "✅ Profile Created Successfully!";
                 header("Location: agent_portal.php?alert=" . urlencode($alert));
                 exit;
             } else {
-                $alert = "❌ Database Error: " . mysqli_error($conn);
+                http_response_code(500);
+                $alert = "❌ Unable to create profile.";
             }
         }
     }
@@ -178,6 +181,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
             <?php endif; ?>
 
             <form action="" method="post" id="profile_form" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="<?php echo $escape($csrfToken); ?>">
                 <div class="field_set">
                     <label for="firstname">First Name:</label>
                     <input type="text" id="firstname" name="firstname" required

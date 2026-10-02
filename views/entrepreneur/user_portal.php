@@ -1,6 +1,8 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../config/security.php';
+requireAccountRole($conn, ['user']);
 
 ?>
 <!DOCTYPE html>
@@ -63,20 +65,21 @@ require_once __DIR__ . '/../../config/database.php';
                 <div class="business_card_container">
                     <?php
                     if (isset($_SESSION["loggedin"]) && $_SESSION["loggedin"] == true) {
-                        $sql = "SELECT * FROM `business_ideas` WHERE `status`='Approved'";
-                        $result = mysqli_query($conn, $sql);
-                        $numRows = mysqli_num_rows($result);
+                        $statement = $conn->prepare("SELECT * FROM business_ideas WHERE status = 'Approved' AND visibility = 'Public'");
+                        $statement->execute();
+                        $result = $statement->get_result();
+                        $numRows = $result->num_rows;
                         if ($numRows > 0) {
-                            while ($row = mysqli_fetch_assoc($result)) {
+                            while ($row = $result->fetch_assoc()) {
                                 // $_SESSION['agent_profile_id'] = $row['agent_profile_id'];
                                 $business_idea_id = (int)$row["id"];
                                 $agent_profile_id = (int)$row["user_id"];
                                 echo '<div class="card business_idea_card">
-                                        <h2>' . $row["idea_title"] . '</h2>
-                                        <p>' . substr($row["problem_statement"], 0, 170) . ' ........ </p>
+                                        <h2>' . htmlspecialchars($row["idea_title"], ENT_QUOTES, 'UTF-8') . '</h2>
+                                        <p>' . htmlspecialchars(substr($row["problem_statement"], 0, 170), ENT_QUOTES, 'UTF-8') . ' ........ </p>
                                         <div class="idea_bottom_section">
                                         <a href="../ideas/idea_details.php?business_idea_id=' . $business_idea_id . '&agent_profile_id=' . $agent_profile_id . '">Learn More <img src="../../public/assets/images/arrow_icon.png" alt="" class="arrow_icon"></a>
-                                        <span>' . $row["idea_category"] . '</span>
+                                        <span>' . htmlspecialchars($row["idea_category"], ENT_QUOTES, 'UTF-8') . '</span>
                                         </div>
                                     </div>';
                             }
@@ -94,21 +97,22 @@ require_once __DIR__ . '/../../config/database.php';
 
                     <?php
                     if (isset($_SESSION["loggedin"]) && $_SESSION["loggedin"] == true) {
-                        $sql = "SELECT * FROM `profiles` WHERE `status`='Approved'";
-                        $result = mysqli_query($conn, $sql);
-                        $numRows = mysqli_num_rows($result);
+                        $statement = $conn->prepare("SELECT profiles.* FROM profiles JOIN accounts ON accounts.id = profiles.agent_account_id WHERE profiles.status = 'Approved' AND accounts.entity_type = 'agent' AND accounts.status = 'Active'");
+                        $statement->execute();
+                        $result = $statement->get_result();
+                        $numRows = $result->num_rows;
                         // if ($numRows > 0) {
-                        while ($row = mysqli_fetch_assoc($result)) {
+                        while ($row = $result->fetch_assoc()) {
                             $agent_profile_id = (int)$row["agent_account_id"];
                             // $_SESSION["id"] = $row["id"];
                             echo ' <div class="mentors_card">
                                             <div class="mentor">
                                                 <div class="mentor_icon">
-                                                    <img src="../../uploads/profiles/' . $row['profile_image'] . '" alt="Profile Image">
+                                                    <img src="../profiles/profile_image.php?agent_account_id=' . (int)$row['agent_account_id'] . '" alt="Profile Image">
                                                 </div>
                                                 <div class="mentor_profile">
-                                                    <h1>' . $row["agent_f_name"] . ' ' . $row["agent_l_name"] . '</h1>
-                                                    <p>' . $row["field_expertise"] . '</p>
+                                                    <h1>' . htmlspecialchars($row["agent_f_name"] . ' ' . $row["agent_l_name"], ENT_QUOTES, 'UTF-8') . '</h1>
+                                                    <p>' . htmlspecialchars($row["field_expertise"], ENT_QUOTES, 'UTF-8') . '</p>
                                                 </div>
                                             </div>
                                            <a href="../profiles/selected_agent_ideas.php?agent_profile_id=' . $agent_profile_id . '">Explore</a>

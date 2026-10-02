@@ -1,6 +1,9 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../config/security.php';
+requireAccountRole($conn, ['admin']);
+$escape = static fn($value) => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -84,21 +87,26 @@ require_once __DIR__ . '/../../config/database.php';
                                 while ($row = mysqli_fetch_assoc($result)) {
                                     $agent_account_id = $row["user_id"];
                                     $business_idea_id = $row["id"];
-                                    $sql2 = "SELECT * FROM `profiles` WHERE agent_account_id='$agent_account_id'";
-                                    $result2 = mysqli_query($conn, $sql2);
-                                    while ($row2 = mysqli_fetch_assoc($result2)) {
+                                    $profileStatement = $conn->prepare('SELECT agent_f_name, agent_l_name, field_expertise, profile_image FROM profiles WHERE agent_account_id = ? LIMIT 1');
+                                    $profileStatement->bind_param('i', $agent_account_id);
+                                    $profileStatement->execute();
+                                    $row2 = $profileStatement->get_result()->fetch_assoc();
+                                    if ($row2) {
                                         $agent_name = $row2['agent_f_name'] . ' ' . $row2['agent_l_name'];
                                         $expertise = $row2['field_expertise'];
                                         $profile_image = $row2['profile_image'];
+                                    } else {
+                                        $agent_name = $expertise = $profile_image = '';
                                     }
+                                    $profileStatement->close();
                                     $agentAccountId = (int)$agent_account_id;
                                     $ideaId = (int)$business_idea_id;
                                     echo '<tr>
-                            <td><img src="../../uploads/profiles/' . $profile_image . '" class="table_profile"></td>
-                            <td>' . $agent_name . '</td>
-                            <td><span>' . $row["idea_title"] . '</span></td>
-                            <td>' . $expertise . '</td>
-                            <td><span class="badge ' . $row["status"] . '">' . $row["status"] . '</span></td>
+                            <td><img src="../profiles/profile_image.php?agent_account_id=' . (int)$agent_account_id . '" class="table_profile"></td>
+                            <td>' . $escape($agent_name) . '</td>
+                            <td><span>' . $escape($row["idea_title"]) . '</span></td>
+                            <td>' . $escape($expertise) . '</td>
+                            <td><span class="badge ' . $escape($row["status"]) . '">' . $escape($row["status"]) . '</span></td>
                             <td><a href="./idea_details.php?agent_profile_id=' . $agentAccountId . '&business_idea_id=' . $ideaId . '">View</a></td>
                         </tr>';
                                 }
@@ -115,21 +123,26 @@ require_once __DIR__ . '/../../config/database.php';
                                 while ($row = mysqli_fetch_assoc($result)) {
                                     $agent_account_id = $row["user_id"];
                                     $business_idea_id = $row["id"];
-                                    $sql2 = "SELECT * FROM `profiles` WHERE agent_account_id='$agent_account_id'";
-                                    $result2 = mysqli_query($conn, $sql2);
-                                    while ($row2 = mysqli_fetch_assoc($result2)) {
+                                    $profileStatement = $conn->prepare('SELECT agent_f_name, agent_l_name, field_expertise, profile_image FROM profiles WHERE agent_account_id = ? LIMIT 1');
+                                    $profileStatement->bind_param('i', $agent_account_id);
+                                    $profileStatement->execute();
+                                    $row2 = $profileStatement->get_result()->fetch_assoc();
+                                    if ($row2) {
                                         $agent_name = $row2['agent_f_name'] . ' ' . $row2['agent_l_name'];
                                         $expertise = $row2['field_expertise'];
                                         $profile_image = $row2['profile_image'];
+                                    } else {
+                                        $agent_name = $expertise = $profile_image = '';
                                     }
+                                    $profileStatement->close();
                                     $agentAccountId = (int)$agent_account_id;
                                     $ideaId = (int)$business_idea_id;
                                     echo '<tr>
-                            <td><img src="../../uploads/profiles/' . $profile_image . '" class="table_profile"></td>
-                            <td>' . $agent_name . '</td>
-                            <td><span>' . $row["idea_title"] . '</span></td>
-                            <td>' . $expertise . '</td>
-                            <td><span class="badge ' . $row["status"] . '">' . $row["status"] . '</span></td>
+                            <td><img src="../profiles/profile_image.php?agent_account_id=' . (int)$agent_account_id . '" class="table_profile"></td>
+                            <td>' . $escape($agent_name) . '</td>
+                            <td><span>' . $escape($row["idea_title"]) . '</span></td>
+                            <td>' . $escape($expertise) . '</td>
+                            <td><span class="badge ' . $escape($row["status"]) . '">' . $escape($row["status"]) . '</span></td>
                             <td><a href="./idea_details.php?agent_profile_id=' . $agentAccountId . '&business_idea_id=' . $ideaId . '">View</a></td>
                         </tr>';
                                 }

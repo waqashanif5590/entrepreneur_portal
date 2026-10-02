@@ -1,68 +1,65 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../config/security.php';
 
-if (!isset($_SESSION['id'])) {
-    header("Location: ../auth/login_dashboard.php");
-    exit();
-}
-
-$rawAgentAccountId = $_GET['id'] ?? null;
-if (!is_string($rawAgentAccountId) || !preg_match('/\A[0-9]+\z/', $rawAgentAccountId) || (int)$rawAgentAccountId < 1 || (string)(int)$rawAgentAccountId !== ltrim($rawAgentAccountId, '0')) {
+requireAccountRole($conn, ['user', 'agent']);
+requirePostCsrfToken();
+$agentId = requestPositiveId($_POST['agent_profile_id'] ?? null);
+$rating = filter_var($_POST['rating'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 5]]);
+$userId = (int)$_SESSION['id'];
+if ($agentId === null || $agentId === $userId || $rating === false) {
     http_response_code(400);
-    exit('Invalid agent request.');
+    exit('Invalid rating request.');
 }
-$agent_profile_id = (int)$rawAgentAccountId;
-$user_rating = $_GET['rating'];
-$user_id = $_SESSION['id'];
 
-function redirect_back($agent_profile_id, $alert) {
-    $ref = $_SERVER['HTTP_REFERER'] ?? '';
-    if (!empty($ref)) {
-        $separator = strpos($ref, '?') !== false ? '&' : '?';
-        header('Location: ' . $ref . $separator . 'alert=' . urlencode($alert));
-    } else {
-        header('Location: ../profiles/selected_agent_ideas.php?agent_profile_id=' . $agent_profile_id . '&alert=' . urlencode($alert));
-    }
+$profile = $conn->prepare("SELECT 1 FROM profiles WHERE agent_account_id = ? AND status = 'Approved' LIMIT 1");
+$profile->bind_param('i', $agentId);
+$profile->execute();
+$isApproved = $profile->get_result()->num_rows > 0;
+$profile->close();
+if (!$isApproved) {
+    http_response_code(404);
+    exit('Agent not found.');
+}
+
+$check = $conn->prepare('SELECT id FROM user_ratings WHERE user_id = ? AND agent_profile_id = ? LIMIT 1');
+$check->bind_param('ii', $userId, $agentId);
+$check->execute();
+$alreadyRated = $check->get_result()->num_rows > 0;
+$check->close();
+if ($alreadyRated) {
+    header('Location: ../profiles/selected_agent_ideas.php?agent_profile_id=' . $agentId . '&alert=' . urlencode('You have already rated this agent'));
     exit();
 }
 
-// Validate rating
-if ($user_rating < 1 || $user_rating > 5) {
-    redirect_back($agent_profile_id, 'Invalid rating');
+$stats = $conn->prepare('SELECT rating, total_ratings FROM engagement_stats WHERE agent_profile_id = ? LIMIT 1');
+$stats->bind_param('i', $agentId);
+$stats->execute();
+$currentStats = $stats->get_result()->fetch_assoc();
+$stats->close();
+if (!$currentStats) {
+    http_response_code(404);
+    exit('Agent statistics not found.');
 }
 
-// Check if user has already rated this agent
-$check_sql = "SELECT id FROM user_ratings WHERE user_id='$user_id' AND agent_profile_id='$agent_profile_id'";
-$check_result = mysqli_query($conn, $check_sql);
-
-if (mysqli_num_rows($check_result) > 0) {
-    // User has already rated, redirect back with message
-    $alert = "You have already rated this agent";
-    redirect_back($agent_profile_id, $alert);
+$newTotal = (int)$currentStats['total_ratings'] + 1;
+$newRating = (((float)$currentStats['rating'] * (int)$currentStats['total_ratings']) + $rating) / $newTotal;
+$conn->begin_transaction();
+$insert = $conn->prepare('INSERT INTO user_ratings (user_id, agent_profile_id, rating) VALUES (?, ?, ?)');
+$insert->bind_param('iii', $userId, $agentId, $rating);
+$ratingInserted = $insert->execute();
+$insert->close();
+$update = $conn->prepare('UPDATE engagement_stats SET rating = ?, total_ratings = ? WHERE agent_profile_id = ?');
+$update->bind_param('dii', $newRating, $newTotal, $agentId);
+$statsUpdated = $update->execute();
+$update->close();
+if (!$ratingInserted || !$statsUpdated) {
+    $conn->rollback();
+    http_response_code(500);
+    exit('Unable to save rating.');
 }
+$conn->commit();
 
-// Add rating to user_ratings table
-$insert_sql = "INSERT INTO user_ratings (user_id, agent_profile_id, rating) VALUES ('$user_id', '$agent_profile_id', '$user_rating')";
-mysqli_query($conn, $insert_sql);
-
-// Update engagement stats
-$sql = "SELECT rating, total_ratings FROM engagement_stats WHERE agent_profile_id='$agent_profile_id'";
-$result = mysqli_query($conn, $sql);
-$row = mysqli_fetch_assoc($result);
-
-$current_rating = $row['rating'];
-$total_ratings = $row['total_ratings'];
-
-// Calculate new average
-$new_total = $total_ratings + 1;
-$new_rating = (($current_rating * $total_ratings) + $user_rating) / $new_total;
-
-$update = "UPDATE engagement_stats
-           SET rating='$new_rating', total_ratings='$new_total'
-           WHERE agent_profile_id='$agent_profile_id'";
-
-mysqli_query($conn, $update);
-
-$alert = "Thank you for rating!";
-redirect_back($agent_profile_id, $alert);
+header('Location: ../profiles/selected_agent_ideas.php?agent_profile_id=' . $agentId . '&alert=' . urlencode('Thank you for rating!'));
+exit();

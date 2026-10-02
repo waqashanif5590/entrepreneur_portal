@@ -1,6 +1,9 @@
 <?php
 require_once __DIR__ . '/../../config/database.php';
 session_start();
+require_once __DIR__ . '/../../config/security.php';
+requireAccountRole($conn, ['admin']);
+$escape = static fn($value) => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -25,7 +28,7 @@ session_start();
             <?php
             if (isset($_GET['alert'])) {
                 $alert = $_GET['alert'];
-                echo '<p id="alert_message">' . $alert . '</p>';
+                echo '<p id="alert_message">' . $escape($alert) . '</p>';
                 unset($alert);
             }
             ?>

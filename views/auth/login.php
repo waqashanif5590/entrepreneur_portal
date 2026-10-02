@@ -1,8 +1,10 @@
 <?php
 session_start();
 $alert = '';
-if (isset($_GET['type'])) {
-    $entity_type = $_GET['type'];
+$entity_type = $_GET['type'] ?? '';
+$loginTypes = ['user', 'agent', 'admin'];
+if (!in_array($entity_type, $loginTypes, true)) {
+    $entity_type = 'user';
 }
 
 // Generate CAPTCHA if not set or reload requested
@@ -30,35 +32,37 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if ($user_captcha !== $_SESSION['captcha']) {
         $alert = "❌ Invalid CAPTCHA.";
     } else {
-        $sql = "SELECT * FROM `accounts` WHERE email = '$email'";
-        $result = mysqli_query($conn, $sql);
-        if (mysqli_num_rows($result) > 0) {
-            while ($row = mysqli_fetch_assoc($result)) {
-                $entity = $row["entity_type"];
-                if ($entity != $entity_type) {
-                    $alert = ' ❌ No ' . $entity_type . ' Exists for this email';
-                } else if ($row['status'] === 'Blocked') {
-                    $alert = "❌ Your account is blocked.";
-                } else if (password_verify($password, $row['password'])) {
-                    $_SESSION['loggedin'] = true;
-                    $_SESSION['firstname'] = $row['first_name'];
-                    $_SESSION['lastname'] = $row['last_name'];
-                    $_SESSION['id'] = $row['id'];
-                    $_SESSION['email'] = $row['email'];
+        $statement = $conn->prepare('SELECT id, first_name, last_name, entity_type, email, password, status FROM accounts WHERE email = ? LIMIT 1');
+        $statement->bind_param('s', $email);
+        $statement->execute();
+        $row = $statement->get_result()->fetch_assoc();
+        $statement->close();
 
-                    // Regenerate CAPTCHA after successful login
-                    $_SESSION['captcha'] = generateCaptcha();
+        if ($row) {
+            $entity = $row['entity_type'];
+            if ($entity !== $entity_type) {
+                $alert = ' ❌ No ' . $entity_type . ' Exists for this email';
+            } elseif ($row['status'] === 'Blocked') {
+                $alert = "❌ Your account is blocked.";
+            } elseif (password_verify($password, $row['password'])) {
+                session_regenerate_id(true);
+                $_SESSION['loggedin'] = true;
+                $_SESSION['firstname'] = $row['first_name'];
+                $_SESSION['lastname'] = $row['last_name'];
+                $_SESSION['id'] = $row['id'];
+                $_SESSION['email'] = $row['email'];
 
-                    $portalPaths = [
-                        'user' => '../entrepreneur/user_portal.php',
-                        'agent' => '../mentor/agent_portal.php',
-                        'admin' => '../admin/admin_portal.php',
-                    ];
-                    header('Location: ' . $portalPaths[$entity_type]);
-                    exit;
-                } else {
-                    $alert = "❌ Invalid password.";
-                }
+                $_SESSION['captcha'] = generateCaptcha();
+
+                $portalPaths = [
+                    'user' => '../entrepreneur/user_portal.php',
+                    'agent' => '../mentor/agent_portal.php',
+                    'admin' => '../admin/admin_portal.php',
+                ];
+                header('Location: ' . $portalPaths[$entity]);
+                exit;
+            } else {
+                $alert = "❌ Invalid password.";
             }
         } else {
             $alert = "❌ No account found with that email.";
@@ -91,7 +95,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <section id="main_content">
             <div class="form_container">
                 <h1>Login to Entrepreneur Portal</h1>
-                <form action="./login.php?type=<?php echo $entity_type; ?>" id="form" method="post">
+                <form action="./login.php?type=<?php echo htmlspecialchars($entity_type, ENT_QUOTES, 'UTF-8'); ?>" id="form" method="post">
                     <div class="field_set">
                         <label for="email">Email</label>
                         <input type="email" name="email" id="email">
@@ -104,7 +108,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <p>Don't have an account?<a href="./register.php">Register</a></p>
                     <div class="captcha">
                         <p id="random_captcha" class="random_captcha"><?php echo $_SESSION['captcha']; ?></p>
-                        <a href="./login.php?type=<?php echo $entity_type; ?>&reload_captcha=1" id="reloader"><i class="fas fa-sync-alt"></i></a>
+                        <a href="./login.php?type=<?php echo htmlspecialchars($entity_type, ENT_QUOTES, 'UTF-8'); ?>&reload_captcha=1" id="reloader"><i class="fas fa-sync-alt"></i></a>
                         <input type="text" name="verify_captcha" id="verify_captcha" class="verify_captcha">
                     </div>
                     <button id="submit_btn">Submit</button>

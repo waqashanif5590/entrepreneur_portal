@@ -10,19 +10,14 @@
              <?php
                 if (isset($_SESSION["loggedin"]) && $_SESSION["loggedin"] == true) {
                     require_once __DIR__ . '/../config/database.php';
-                    $agent_account_id = $_SESSION['id'];
-                    $sql = "SELECT profile_image FROM profiles WHERE agent_account_id='$agent_account_id'";
-                    $result = mysqli_query($conn, $sql);
-                    if (!$result) {
-                        echo "Error: " . mysqli_error($conn);
-                    }
-                    if (mysqli_num_rows($result) > 0) {
-                        $row = mysqli_fetch_assoc($result);
-                        if (!empty($row['profile_image'])) {
-                            echo '<img src="../../uploads/profiles/' . $row['profile_image'] . '" alt="Profile Image">';
-                        } else {
-                            echo '<img src="../../public/assets/images/profile.png" alt="Default Profile Image">';
-                        }
+                    $agent_account_id = (int)$_SESSION['id'];
+                    $statement = $conn->prepare('SELECT profile_image FROM profiles WHERE agent_account_id = ? LIMIT 1');
+                    $statement->bind_param('i', $agent_account_id);
+                    $statement->execute();
+                    $row = $statement->get_result()->fetch_assoc();
+                    $statement->close();
+                    if (!empty($row['profile_image'])) {
+                        echo '<img src="../profiles/profile_image.php?agent_account_id=' . $agent_account_id . '" alt="Profile Image">';
                     } else {
                         echo '<img src="../../public/assets/images/profile.png" alt="Default Profile Image">';
                     }

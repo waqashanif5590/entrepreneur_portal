@@ -1,6 +1,10 @@
 <?php
 require_once __DIR__ . '/../../config/database.php';
 session_start();
+require_once __DIR__ . '/../../config/security.php';
+requireAccountRole($conn, ['admin']);
+$csrfToken = htmlspecialchars(csrfToken(), ENT_QUOTES, 'UTF-8');
+$escape = static fn($value) => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -53,7 +57,7 @@ session_start();
             <?php
             if (isset($_GET['alert'])) {
                 $alert = $_GET['alert'];
-                echo '<p id="alert_message">' . $alert . '</p>';
+                echo '<p id="alert_message">' . $escape($alert) . '</p>';
                 unset($alert);
             }
             ?>
@@ -79,10 +83,10 @@ session_start();
                             while ($row = mysqli_fetch_assoc($result)) {
                                 echo '<tr>
                                         <td><img src="../../public/assets/images/profile.png" class="table_profile"></td>
-                                        <td>' . $row["first_name"] . ' ' . $row["last_name"] . '</td>
-                                        <td>' . $row["email"] . '</td>
-                                        <td><span class="badge ' . ($row["status"] == "Blocked" ? "Blocked" : "Approved") . '">' . $row["status"] . '</span></td>
-                                        <td><a href="block_user.php?id=' . $row["id"] . '">' . ($row["status"] == "Blocked" ? "Unblock" : "Block") . '</a></td>
+                                        <td>' . $escape($row["first_name"] . ' ' . $row["last_name"]) . '</td>
+                                        <td>' . $escape($row["email"]) . '</td>
+                                        <td><span class="badge ' . ($row["status"] == "Blocked" ? "Blocked" : "Approved") . '">' . $escape($row["status"]) . '</span></td>
+                                        <td><form action="block_user.php" method="post"><input type="hidden" name="csrf_token" value="' . $csrfToken . '"><input type="hidden" name="id" value="' . (int)$row["id"] . '"><button type="submit">' . ($row["status"] == "Blocked" ? "Unblock" : "Block") . '</button></form></td>
                                     </tr>';
                             }
                         } else {

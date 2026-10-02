@@ -1,15 +1,51 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../config/security.php';
+$role = requireAccountRole($conn, ['admin', 'agent', 'user']);
+$accountId = (int)$_SESSION['id'];
+$csrfToken = csrfToken();
  $rawAuthorId = $_GET['author_id'] ?? null;
- $rawForumId = $_GET['forum_id'] ?? null;
-if (!is_string($rawAuthorId) || !preg_match('/\A[0-9]+\z/', $rawAuthorId) || (int)$rawAuthorId < 1 || (string)(int)$rawAuthorId !== ltrim($rawAuthorId, '0') ||
-    !is_string($rawForumId) || !preg_match('/\A[0-9]+\z/', $rawForumId) || (int)$rawForumId < 1 || (string)(int)$rawForumId !== ltrim($rawForumId, '0')) {
+$author_id = requestPositiveId($rawAuthorId);
+$forum_id = requestPositiveId($_GET['forum_id'] ?? null);
+if ($author_id === null || $forum_id === null) {
     http_response_code(400);
     exit('Invalid request');
 }
-$author_id = (int)$rawAuthorId;
-$forum_id = (int)$rawForumId;
+
+if ($role === 'admin') {
+    $forumStatement = $conn->prepare('SELECT forums.*, CONCAT(accounts.first_name, \' \', accounts.last_name) AS author_name FROM forums INNER JOIN accounts ON accounts.id = forums.user_id WHERE forums.id = ? AND forums.user_id = ? LIMIT 1');
+    $forumStatement->bind_param('ii', $forum_id, $author_id);
+} elseif ($role === 'agent') {
+    $forumStatement = $conn->prepare("SELECT forums.*, CONCAT(accounts.first_name, ' ', accounts.last_name) AS author_name FROM forums INNER JOIN accounts ON accounts.id = forums.user_id WHERE forums.id = ? AND forums.user_id = ? AND (forums.status = 'Approved' OR forums.user_id = ?) LIMIT 1");
+    $forumStatement->bind_param('iii', $forum_id, $author_id, $accountId);
+} else {
+    $forumStatement = $conn->prepare("SELECT forums.*, CONCAT(accounts.first_name, ' ', accounts.last_name) AS author_name FROM forums INNER JOIN accounts ON accounts.id = forums.user_id WHERE forums.id = ? AND forums.user_id = ? AND forums.status = 'Approved' LIMIT 1");
+    $forumStatement->bind_param('ii', $forum_id, $author_id);
+}
+$forumStatement->execute();
+$forum = $forumStatement->get_result()->fetch_assoc();
+$forumStatement->close();
+if (!$forum) {
+    http_response_code(404);
+    exit('Forum not found.');
+}
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requirePostCsrfToken();
+    $comment = trim($_POST['comment'] ?? '');
+    if ($comment === '') {
+        http_response_code(400);
+        exit('Comment cannot be empty.');
+    }
+    $insert = $conn->prepare('INSERT INTO threads (comment, user_id, forum_id, date) VALUES (?, ?, ?, CURRENT_TIMESTAMP())');
+    $insert->bind_param('sii', $comment, $accountId, $forum_id);
+    if (!$insert->execute()) {
+        http_response_code(500);
+        exit('Unable to submit comment.');
+    }
+    $insert->close();
+}
+$escape = static fn($value) => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -34,14 +70,10 @@ $forum_id = (int)$rawForumId;
             <div class="forum_header">
                 <h1 class="welcome_text">Welcome to my forum </h1>
                 <?php
-                $sql = "SELECT forums.*, CONCAT(accounts.first_name, ' ', accounts.last_name) AS author_name FROM forums INNER JOIN accounts ON accounts.id = forums.user_id WHERE forums.id=$forum_id AND forums.user_id=$author_id";
-                $result = mysqli_query($conn, $sql);
-                while ($row = mysqli_fetch_assoc($result)) {
-                    echo '  <h2 class="problem_title"><strong>Title: </strong>' . $row["forum_title"] . '</h2>
-                <p class="problem_desc">' . $row["forum_desc"] . '</p>
-                <p class="author"><strong>Posted by: </strong>' . $row["author_name"] . '</p>
-                <p class="post_date">' . $row["date"] . '</p>';
-                }
+                echo '  <h2 class="problem_title"><strong>Title: </strong>' . $escape($forum["forum_title"]) . '</h2>
+                <p class="problem_desc">' . nl2br($escape($forum["forum_desc"])) . '</p>
+                <p class="author"><strong>Posted by: </strong>' . $escape($forum["author_name"]) . '</p>
+                <p class="post_date">' . $escape($forum["date"]) . '</p>';
                 ?>
                 <p class="roles">Community Guidelines:</p>
                 <ul>
@@ -54,18 +86,8 @@ $forum_id = (int)$rawForumId;
             </div>
 
             <?php
-            if (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] == true) {
-                if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-                    $comment = $_POST['comment'];
-                    $comment_by_id = (int)$_SESSION['id'];
-                    $sql = "INSERT INTO `threads` (`comment`, `user_id`, `forum_id`, `date`) VALUES ('$comment', '$comment_by_id', '$forum_id', current_timestamp())";
-                    $result = mysqli_query($conn, $sql);
-                    if ($result) {
-                        echo '<p id="alert_message">Comment added successfully</p>';
-                    } else {
-                        die("Error: " . mysqli_error($conn));
-                    }
-                }
+            if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+                echo '<p id="alert_message">Comment added successfully</p>';
             }
             ?>
             <div class="new_comment">
@@ -73,6 +95,7 @@ $forum_id = (int)$rawForumId;
                 <?php
                 ?>
                 <form action="./forum.php?author_id=<?php echo $author_id; ?>&forum_id=<?php echo $forum_id; ?>" method="post">
+                    <input type="hidden" name="csrf_token" value="<?php echo $escape($csrfToken); ?>">
                     <div class="field">
                         <label for="comment">Write Comment</label>
                         <textarea name="comment" id="comment"></textarea>
@@ -82,29 +105,30 @@ $forum_id = (int)$rawForumId;
             </div>
             <div class="forum_content">
                 <?php
-                if (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] == true) {
-                    $sql = "SELECT threads.*, CONCAT(accounts.first_name, ' ', accounts.last_name) AS comment_by FROM threads INNER JOIN accounts ON accounts.id = threads.user_id WHERE threads.forum_id='$forum_id' ORDER BY threads.date DESC";
-                    $result = mysqli_query($conn, $sql);
-                    $numRows = mysqli_num_rows($result);
-                    if ($numRows == 0) {
+                $threadsStatement = $conn->prepare('SELECT threads.*, CONCAT(accounts.first_name, \' \', accounts.last_name) AS comment_by FROM threads INNER JOIN accounts ON accounts.id = threads.user_id WHERE threads.forum_id = ? ORDER BY threads.date DESC');
+                    $threadsStatement->bind_param('i', $forum_id);
+                    $threadsStatement->execute();
+                    $result = $threadsStatement->get_result();
+                    $numRows = $result->num_rows;
+                    if ($numRows === 0) {
                         echo '<div class="card">
                         <h2>No Comment exists</h2>
                         <p>Be the first to comment.</p>
                     </div>';
                     } else {
 
-                        while ($row = mysqli_fetch_assoc($result)) {
+                        while ($row = $result->fetch_assoc()) {
                             echo '<div class="fetched_comment">
                                     <div class="image"><img src="../../public/assets/images/profile.png" alt=""></div>
                                     <div class="comment_detail">
-                                        <h1 class="participant">' . $row["comment_by"] . '</h1>
-                                        <p class="comment">' . $row["comment"] . '</p>
+                                        <h1 class="participant">' . $escape($row["comment_by"]) . '</h1>
+                                        <p class="comment">' . nl2br($escape($row["comment"])) . '</p>
                                     </div>
                                     <div class="date">
-                                        <p>' . $row["date"] . '</p>
+                                        <p>' . $escape($row["date"]) . '</p>
                                     </div>
                             </div>';
-                        }
+                        $threadsStatement->close();
                     }
                 }
                 ?>

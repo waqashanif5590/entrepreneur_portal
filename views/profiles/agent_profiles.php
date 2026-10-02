@@ -1,23 +1,9 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../config/security.php';
 
-if (empty($_SESSION['loggedin']) || empty($_SESSION['id'])) {
-    http_response_code(403);
-    exit('Please sign in to view profiles.');
-}
-
-$accountId = (int)$_SESSION['id'];
-$roleStatement = $conn->prepare('SELECT entity_type FROM accounts WHERE id = ?');
-$roleStatement->bind_param('i', $accountId);
-$roleStatement->execute();
-$account = $roleStatement->get_result()->fetch_assoc();
-$roleStatement->close();
-$role = $account['entity_type'] ?? '';
-if (!in_array($role, ['admin', 'agent', 'user'], true)) {
-    http_response_code(403);
-    exit('Access denied.');
-}
+$role = requireAccountRole($conn, ['admin', 'agent', 'user']);
 
 $status = $_GET['status'] ?? '';
 if ($role === 'admin' && in_array($status, ['Pending', 'Approved', 'Blocked', 'Rejected'], true)) {
@@ -26,7 +12,7 @@ if ($role === 'admin' && in_array($status, ['Pending', 'Approved', 'Blocked', 'R
 } elseif ($role === 'admin') {
     $statement = $conn->prepare('SELECT agent_account_id, agent_f_name, agent_l_name, agent_email, profile_image, field_expertise, status FROM profiles ORDER BY agent_account_id DESC');
 } else {
-    $statement = $conn->prepare("SELECT agent_account_id, agent_f_name, agent_l_name, agent_email, profile_image, field_expertise, status FROM profiles WHERE status = 'Approved' ORDER BY agent_account_id DESC");
+    $statement = $conn->prepare("SELECT profiles.agent_account_id, profiles.agent_f_name, profiles.agent_l_name, profiles.agent_email, profiles.profile_image, profiles.field_expertise, profiles.status FROM profiles JOIN accounts ON accounts.id = profiles.agent_account_id WHERE profiles.status = 'Approved' AND accounts.entity_type = 'agent' AND accounts.status = 'Active' ORDER BY profiles.agent_account_id DESC");
 }
 $statement->execute();
 $profiles = $statement->get_result();
@@ -69,7 +55,7 @@ $escape = static fn($value) => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF
                                 <?php while ($profile = $profiles->fetch_assoc()): ?>
                                     <?php $agentAccountId = (int)$profile['agent_account_id']; ?>
                                     <tr>
-                                        <td><img src="../../uploads/profiles/<?php echo rawurlencode($profile['profile_image']); ?>" class="table_profile" alt="Profile"></td>
+                                        <td><img src="profile_image.php?agent_account_id=<?php echo $agentAccountId; ?>" class="table_profile" alt="Profile"></td>
                                         <td><?php echo $escape($profile['agent_f_name'] . ' ' . $profile['agent_l_name']); ?></td>
                                         <td><?php echo $escape($profile['agent_email']); ?></td>
                                         <td><span class="badge <?php echo $escape($profile['status']); ?>"><?php echo $escape($profile['status']); ?></span></td>
@@ -91,7 +77,7 @@ $escape = static fn($value) => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF
                                 <?php $agentAccountId = (int)$profile['agent_account_id']; ?>
                                 <div class="mentors_card">
                                     <div class="mentor">
-                                        <div class="mentor_icon"><img src="../../uploads/profiles/<?php echo rawurlencode($profile['profile_image']); ?>" alt=""></div>
+                                        <div class="mentor_icon"><img src="profile_image.php?agent_account_id=<?php echo $agentAccountId; ?>" alt=""></div>
                                         <div class="mentor_profile">
                                             <h2><?php echo $escape($profile['agent_f_name'] . ' ' . $profile['agent_l_name']); ?></h2>
                                             <p><?php echo $escape($profile['field_expertise']); ?></p>

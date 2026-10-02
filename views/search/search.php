@@ -2,28 +2,23 @@
 session_start();
 require_once __DIR__ . '/../../config/database.php';
 
-$query = "";
-if (isset($_GET['q'])) {
-    $query = mysqli_real_escape_string($conn, $_GET['q']);
+$query = $_GET['q'] ?? '';
+if (!is_string($query)) {
+    http_response_code(400);
+    exit('Invalid search query.');
 }
+$pattern = '%' . $query . '%';
 
-// Search Ideas
-$ideas_sql = "SELECT * FROM business_ideas 
-              WHERE idea_title LIKE '%$query%' 
-              OR idea_category LIKE '%$query%'
-              OR problem_statement LIKE '%$query%'
-              OR keywords LIKE '%$query%'";
+$ideasStatement = $conn->prepare("SELECT * FROM business_ideas WHERE status = 'Approved' AND visibility = 'Public' AND (idea_title LIKE ? OR idea_category LIKE ? OR problem_statement LIKE ? OR keywords LIKE ?)");
+$ideasStatement->bind_param('ssss', $pattern, $pattern, $pattern, $pattern);
+$ideasStatement->execute();
+$ideas_result = $ideasStatement->get_result();
 
-$ideas_result = mysqli_query($conn, $ideas_sql);
-
-// Search Mentors
-$mentor_sql = "SELECT * FROM profiles
-               WHERE agent_f_name LIKE '%$query%'
-               OR agent_l_name LIKE '%$query%'
-               OR field_expertise LIKE '%$query%'
-               OR org_name LIKE '%$query%'";
-
-$mentor_result = mysqli_query($conn, $mentor_sql);
+$mentorStatement = $conn->prepare("SELECT profiles.* FROM profiles JOIN accounts ON accounts.id = profiles.agent_account_id WHERE profiles.status = 'Approved' AND accounts.entity_type = 'agent' AND accounts.status = 'Active' AND (profiles.agent_f_name LIKE ? OR profiles.agent_l_name LIKE ? OR profiles.field_expertise LIKE ? OR profiles.org_name LIKE ?)");
+$mentorStatement->bind_param('ssss', $pattern, $pattern, $pattern, $pattern);
+$mentorStatement->execute();
+$mentor_result = $mentorStatement->get_result();
+$escape = static fn($value) => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 ?>
 
 <!DOCTYPE html>
@@ -64,13 +59,13 @@ $mentor_result = mysqli_query($conn, $mentor_sql);
                             $agent = (int)$row["user_id"];
                             echo "
         <div class='business_idea_card'>
-            <h2>{$row['idea_title']}</h2>
-            <p>" . substr($row['problem_statement'], 0, 150) . "...</p>
+            <h2>" . $escape($row['idea_title']) . "</h2>
+            <p>" . $escape(substr($row['problem_statement'], 0, 150)) . "...</p>
             <div class='idea_bottom_section'>
             <a href='../ideas/idea_details.php?business_idea_id=$id&agent_profile_id=$agent'>
                 View Idea
             </a>
-            <span>" . $row["idea_category"] . "</span>
+            <span>" . $escape($row["idea_category"]) . "</span>
              </div>
         </div>";
                         }
@@ -93,11 +88,11 @@ $mentor_result = mysqli_query($conn, $mentor_sql);
         <div class='mentors_card'>
             <div class='mentor'>
                 <div class='mentor_icon'>
-                    <img src='../../uploads/profiles/" . $row['profile_image'] . "' alt='Profile Image'>
+                    <img src='../profiles/profile_image.php?agent_account_id=" . (int)$row['agent_account_id'] . "' alt='Profile Image'>
                 </div>
                 <div class='mentor_profile'>
-                    <h1>{$row['agent_f_name']} {$row['agent_l_name']}</h1>
-                    <p>{$row['field_expertise']}</p>
+                    <h1>" . $escape($row['agent_f_name'] . ' ' . $row['agent_l_name']) . "</h1>
+                    <p>" . $escape($row['field_expertise']) . "</p>
                 </div>
             </div>
             <a href='../profiles/selected_agent_ideas.php?agent_profile_id=$id'>Explore</a>

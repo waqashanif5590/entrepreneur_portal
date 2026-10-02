@@ -3,19 +3,24 @@
 
 session_start();
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../config/security.php';
 
+requireAccountRole($conn, ['agent']);
+$csrfToken = csrfToken();
 if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
     header("Location: ../auth/login_dashboard.php");
     exit;
 } 
 
-$agent_account_id = $_SESSION['id'];
+$agent_account_id = (int)$_SESSION['id'];
 $alert = '';
 
 // ====================== FETCH EXISTING PROFILE ======================
-$sql = "SELECT * FROM profiles WHERE agent_account_id = $agent_account_id LIMIT 1";
-$result = mysqli_query($conn, $sql);
-$profile = mysqli_fetch_assoc($result);
+$profileStatement = $conn->prepare('SELECT * FROM profiles WHERE agent_account_id = ? LIMIT 1');
+$profileStatement->bind_param('i', $agent_account_id);
+$profileStatement->execute();
+$profile = $profileStatement->get_result()->fetch_assoc();
+$profileStatement->close();
 
 if (!$profile) {
     $alert = "❌ No profile found. Please create your profile first.";
@@ -25,19 +30,21 @@ if (!$profile) {
 
 // ====================== HANDLE FORM SUBMISSION ======================
 if ($_SERVER['REQUEST_METHOD'] == "POST") {
+    requirePostCsrfToken();
 
-    $firstname     = mysqli_real_escape_string($conn, $_POST["firstname"]);
-    $lastname      = mysqli_real_escape_string($conn, $_POST["lastname"]);
-    $dob           = mysqli_real_escape_string($conn, $_POST["dob"]);
-    $country       = mysqli_real_escape_string($conn, $_POST["country"]);
-    $city          = mysqli_real_escape_string($conn, $_POST["city"]);
-    $contact       = mysqli_real_escape_string($conn, $_POST["contact"]);
-    $email         = mysqli_real_escape_string($conn, $_POST["email"]);
-    $field         = mysqli_real_escape_string($conn, $_POST["field"]);
-    $organization  = mysqli_real_escape_string($conn, $_POST["organization"]);
-    $experience    = (int)$_POST["experience"];
-    $bio           = mysqli_real_escape_string($conn, $_POST["bio"]);
-    $personal_web  = mysqli_real_escape_string($conn, $_POST["personal_web"]);
+    $firstname     = (string)$_SESSION['firstname'];
+    $lastname      = (string)$_SESSION['lastname'];
+    $dob           = trim($_POST["dob"] ?? '');
+    $country       = trim($_POST["country"] ?? '');
+    $city          = trim($_POST["city"] ?? '');
+    $contact       = trim($_POST["contact"] ?? '');
+    $email         = (string)$_SESSION['email'];
+    $field         = trim($_POST["field"] ?? '');
+    $organization  = trim($_POST["organization"] ?? '');
+    $experience    = filter_var($_POST["experience"] ?? 0, FILTER_VALIDATE_INT);
+    $experience = $experience === false ? 0 : $experience;
+    $bio           = trim($_POST["bio"] ?? '');
+    $personal_web  = trim($_POST["personal_web"] ?? '');
 
     // Validation
     if ($country == 'none' || $field == 'none' || empty($dob) || empty($city) || empty($contact)) {
@@ -48,6 +55,10 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 
         if (!is_dir($upload_dir)) {
             mkdir($upload_dir, 0755, true);
+        }
+        $private_upload_dir = dirname(__DIR__, 2) . '/storage/private_profiles/';
+        if (!is_dir($private_upload_dir) && !mkdir($private_upload_dir, 0750, true) && !is_dir($private_upload_dir)) {
+            $alert = '❌ Unable to prepare secure document storage.';
         }
 
         $profile_image    = $profile['profile_image'];   // Keep old if not updated
@@ -97,7 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 
         // 2. CNIC (Optional)
         if (empty($alert) && !empty($_FILES['cnic']['name'])) {
-            $cnicResult = uploadFile('cnic', ['jpg', 'jpeg', 'png', 'gif'], $upload_dir, 2);
+            $cnicResult = uploadFile('cnic', ['jpg', 'jpeg', 'png', 'gif'], $private_upload_dir, 2);
             if ($cnicResult['success']) {
                 $cnic_path = $cnicResult['path'];
             } else {
@@ -107,7 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 
         // 3. Resume (Optional)
         if (empty($alert) && !empty($_FILES['resume']['name'])) {
-            $resumeResult = uploadFile('resume', ['pdf', 'docx'], $upload_dir, 2);
+            $resumeResult = uploadFile('resume', ['pdf', 'docx'], $private_upload_dir, 2);
             if ($resumeResult['success']) {
                 $resume_path = $resumeResult['path'];
             } else {
@@ -117,7 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 
         // 4. Experience Certificates (Optional)
         if (empty($alert) && !empty($_FILES['documents']['name'])) {
-            $certResult = uploadFile('documents', ['pdf', 'docx'], $upload_dir, 2);
+            $certResult = uploadFile('documents', ['pdf', 'docx'], $private_upload_dir, 2);
             if ($certResult['success']) {
                 $certificate_path = $certResult['path'];
             } else {
@@ -127,34 +138,18 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 
         // ====================== UPDATE DATABASE ======================
         if (empty($alert)) {
-            $sql = "UPDATE profiles SET 
-                    agent_f_name = '$firstname',
-                    agent_l_name = '$lastname',
-                    dob = '$dob',
-                    country = '$country',
-                    city = '$city',
-                    contact = '$contact',
-                    agent_email = '$email',
-                    field_expertise = '$field',
-                    org_name = '$organization',
-                    experience = $experience,
-                    agent_weblink = '$personal_web',
-                    agent_bio = '$bio',
-                    profile_image = '$profile_image',
-                    cnic = '$cnic_path',
-                    resume = '$resume_path',
-                    certificate = '$certificate_path',
-                    status = 'Pending'   -- Reset to Pending on update (optional)
-                    WHERE agent_account_id = $agent_account_id";
-
-            $result = mysqli_query($conn, $sql);
+            $statement = $conn->prepare("UPDATE profiles SET agent_f_name = ?, agent_l_name = ?, dob = ?, country = ?, city = ?, contact = ?, agent_email = ?, field_expertise = ?, org_name = ?, experience = ?, agent_weblink = ?, agent_bio = ?, profile_image = ?, cnic = ?, resume = ?, certificate = ?, status = 'Pending' WHERE agent_account_id = ?");
+            $statement->bind_param('sssssssssissssssi', $firstname, $lastname, $dob, $country, $city, $contact, $email, $field, $organization, $experience, $personal_web, $bio, $profile_image, $cnic_path, $resume_path, $certificate_path, $agent_account_id);
+            $result = $statement->execute();
+            $statement->close();
 
             if ($result) {
                 $alert = "✅ Profile Updated Successfully!";
                 header("Location: agent_portal.php?alert=" . urlencode($alert));
                 exit;
             } else {
-                $alert = "❌ Database Error: " . mysqli_error($conn);
+                http_response_code(500);
+                $alert = "❌ Unable to update profile.";
             }
         }
     }
@@ -191,6 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
             <?php endif; ?>
 
             <form action="" method="post" id="profile_form" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
 
                 <div class="field_set">
                     <label for="firstname">First Name:</label>
@@ -285,7 +281,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                 <div class="field_set">
                     <label>Current Profile Picture:</label><br>
                     <?php if (!empty($profile['profile_image'])): ?>
-                        <img src="../../uploads/profiles/<?= htmlspecialchars($profile['profile_image']) ?>" width="120" style="border-radius:8px; margin-bottom:8px;"><br>
+                        <img src="../profiles/profile_image.php?agent_account_id=<?= $agent_account_id ?>" width="120" style="border-radius:8px; margin-bottom:8px;"><br>
                     <?php endif; ?>
                     <label for="profile_pic">Change Profile Picture (Max 2MB)</label>
                     <input type="file" name="profile_pic" id="profile_pic" accept="image/jpeg,image/png,image/gif">
@@ -294,7 +290,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                 <div class="field_set">
                     <label>Current CNIC:</label><br>
                     <?php if (!empty($profile['cnic'])): ?>
-                        <a href="../../uploads/profiles/<?= htmlspecialchars($profile['cnic']) ?>" target="_blank">View Current CNIC</a><br>
+                        <a href="../profiles/download_document.php?agent_account_id=<?= $agent_account_id ?>&amp;document=cnic">View Current CNIC</a><br>
                     <?php endif; ?>
                     <label for="cnic">Change CNIC (Max 2MB)</label>
                     <input type="file" name="cnic" id="cnic" accept="image/jpeg,image/png,image/gif">
@@ -303,7 +299,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                 <div class="field_set">
                     <label>Current Resume:</label><br>
                     <?php if (!empty($profile['resume'])): ?>
-                        <a href="../../uploads/profiles/<?= htmlspecialchars($profile['resume']) ?>" target="_blank">View Current Resume</a><br>
+                        <a href="../profiles/download_document.php?agent_account_id=<?= $agent_account_id ?>&amp;document=resume">View Current Resume</a><br>
                     <?php endif; ?>
                     <label for="resume">Change Resume (Max 2MB)</label>
                     <input type="file" name="resume" id="resume" accept=".pdf,.docx">
@@ -312,7 +308,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                 <div class="field_set">
                     <label>Current Experience Certificate:</label><br>
                     <?php if (!empty($profile['certificate'])): ?>
-                        <a href="../../uploads/profiles/<?= htmlspecialchars($profile['certificate']) ?>" target="_blank">View Current Certificate</a><br>
+                        <a href="../profiles/download_document.php?agent_account_id=<?= $agent_account_id ?>&amp;document=certificate">View Current Certificate</a><br>
                     <?php endif; ?>
                     <label for="documents">Change Experience Certificate (Optional)</label>
                     <input type="file" name="documents" id="documents" accept=".pdf,.docx">

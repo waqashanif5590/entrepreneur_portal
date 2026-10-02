@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../config/security.php';
 
 if (empty($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true || empty($_SESSION['id'])) {
     header('Location: ../auth/login_dashboard.php');
@@ -8,6 +9,8 @@ if (empty($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true || empty($_SE
 }
 
 $accountId = (int)$_SESSION['id'];
+$accountRole = requireAccountRole($conn, ['agent']);
+$csrfToken = csrfToken();
 $profileStatement = $conn->prepare('SELECT status FROM profiles WHERE agent_account_id = ? LIMIT 1');
 $profileStatement->bind_param('i', $accountId);
 $profileStatement->execute();
@@ -66,23 +69,25 @@ if (($agentProfile['status'] ?? null) !== 'Approved') {
             </div>
             <?php
             if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-                $title = $_POST['title'];
-                $desc = $_POST['statement'];
-                $author_id = $_SESSION['id'];
-                $firstname = $_SESSION['firstname'];
-                $lastname = $_SESSION['lastname'];
-                $sql = "INSERT INTO `forums` (`forum_title`, `forum_desc`, `user_id`, `date`) VALUES ('$title', '$desc', '$author_id', current_timestamp())";
-                $result = mysqli_query($conn, $sql);
-                if ($result) {
+                requirePostCsrfToken();
+                $title = trim($_POST['title'] ?? '');
+                $desc = trim($_POST['statement'] ?? '');
+                $author_id = $accountId;
+                $statement = $conn->prepare('INSERT INTO forums (forum_title, forum_desc, user_id, date) VALUES (?, ?, ?, CURRENT_TIMESTAMP())');
+                $statement->bind_param('ssi', $title, $desc, $author_id);
+                if ($title !== '' && $desc !== '' && $statement->execute()) {
                     echo '<p id="alert_message">Forum added successfully</p>';
                 } else {
-                    die("Error: " . mysqli_error($conn));
+                    http_response_code(500);
+                    echo '<p id="alert_message">Unable to create forum.</p>';
                 }
+                $statement->close();
             }
             ?>
             <div class="new_comment">
                 <h1>Start a new discussion:</h1>
                 <form action="./create_forum.php" method="post">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                     <div class="field">
                         <label for="comment">Problem Title</label>
                         <input type="text" name="title" id="title">

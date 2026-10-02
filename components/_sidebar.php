@@ -16,18 +16,18 @@
 
             $logged_id = $_SESSION['id'];
 
-            // Fetch user type
-            $sql = "SELECT * FROM accounts WHERE id='$logged_id'";
-            $result = mysqli_query($conn, $sql);
-            $row = mysqli_fetch_assoc($result);
+            $accountStatement = $conn->prepare('SELECT entity_type FROM accounts WHERE id = ? LIMIT 1');
+            $accountStatement->bind_param('i', $logged_id);
+            $accountStatement->execute();
+            $row = $accountStatement->get_result()->fetch_assoc();
+            $accountStatement->close();
 
             // Count unread messages
-            $unread_sql = "SELECT COUNT(*) AS unread_count 
-                           FROM messages 
-                           WHERE receiver_id='$logged_id' 
-                           AND is_read=0";
-            $unread_result = mysqli_query($conn, $unread_sql);
-            $unread_row = mysqli_fetch_assoc($unread_result);
+            $unreadStatement = $conn->prepare('SELECT COUNT(*) AS unread_count FROM messages WHERE receiver_id = ? AND is_read = 0');
+            $unreadStatement->bind_param('i', $logged_id);
+            $unreadStatement->execute();
+            $unread_row = $unreadStatement->get_result()->fetch_assoc();
+            $unreadStatement->close();
             $unread_count = $unread_row['unread_count'];
 
             // Add class if unread exists
@@ -55,10 +55,12 @@
 
                 $agentAccountId = (int)$_SESSION['id'];
 
-                $check_profile_sql = "SELECT * FROM `profiles` WHERE agent_account_id='$logged_id'";
-                $check_profile_result = mysqli_query($conn, $check_profile_sql);
-                $check_profile_row = mysqli_fetch_assoc($check_profile_result);
-                if (mysqli_num_rows($check_profile_result) == 0) {
+                $checkProfileStatement = $conn->prepare('SELECT status FROM profiles WHERE agent_account_id = ? LIMIT 1');
+                $checkProfileStatement->bind_param('i', $logged_id);
+                $checkProfileStatement->execute();
+                $check_profile_row = $checkProfileStatement->get_result()->fetch_assoc();
+                $checkProfileStatement->close();
+                if (!$check_profile_row) {
                     $url = "../mentor/create_profile.php";
                 } else if ($check_profile_row['status'] === 'Pending') {
                     $alert = "Your profile is pending for admin approval. Please wait for admin response";

@@ -1,6 +1,10 @@
 <?php
 require_once __DIR__ . '/../../config/database.php';
 session_start();
+require_once __DIR__ . '/../../config/security.php';
+$viewerRole = requireAccountRole($conn, ['admin', 'agent']);
+$csrfToken = csrfToken();
+$escape = static fn($value) => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -29,27 +33,29 @@ session_start();
             <?php
             if (isset($_GET['alert'])) {
                 $alert = $_GET['alert'];
-                echo '<p id="alert_message">' . $alert . '</p>';
+                echo '<p id="alert_message">' . htmlspecialchars($alert, ENT_QUOTES, 'UTF-8') . '</p>';
                 unset($alert);
             }
             ?>
             <div class="profile_card profile_card_admin">
                 <?php
-                $rawAgentAccountId = $_GET['agent_account_id'] ?? null;
-                if (!is_string($rawAgentAccountId) || !preg_match('/\A[0-9]+\z/', $rawAgentAccountId) || (int)$rawAgentAccountId < 1 || (string)(int)$rawAgentAccountId !== ltrim($rawAgentAccountId, '0')) {
+                $agent_account_id = requestPositiveId($_GET['agent_account_id'] ?? null);
+                if ($agent_account_id === null) {
                     http_response_code(400);
                     exit('Invalid agent request.');
                 }
-                $agent_account_id = (int)$rawAgentAccountId;
-                $sql = "SELECT * FROM `profiles` WHERE agent_account_id = $agent_account_id";
-
-                $result = mysqli_query($conn, $sql);
-                $numRows = mysqli_num_rows($result);
-                if ($numRows == 0) {
-                    echo '<div class="add_card">
-                    <h2>No profile created</h2>
-                    <a href="../mentor/create_profile.php" class="explore_btn">Create Profile</a>
-                    </div>';
+                if ($viewerRole === 'agent' && (int)$_SESSION['id'] !== $agent_account_id) {
+                    http_response_code(403);
+                    exit('Access denied.');
+                }
+                $profileStatement = $conn->prepare('SELECT * FROM profiles WHERE agent_account_id = ? LIMIT 1');
+                $profileStatement->bind_param('i', $agent_account_id);
+                $profileStatement->execute();
+                $result = $profileStatement->get_result();
+                $numRows = $result->num_rows;
+                if ($numRows === 0) {
+                    http_response_code(404);
+                    exit('Agent profile not found.');
                 }
                 // $row = mysqli_fetch_assoc($result);
                 while ($row = mysqli_fetch_assoc($result)) {
@@ -59,29 +65,29 @@ session_start();
                 <div class="profile_header">
                     <div class="profile_info">
                         <div class="profile_pic">
-                            <img src="../../uploads/profiles/' . $row["profile_image"] . '" alt="Agent Profile">
+                            <img src="profile_image.php?agent_account_id=' . $agent_account_id . '" alt="Agent Profile">
                         </div>
 
                         <div class="profile_basic">
-                            <h3>' . $row["agent_f_name"] . ' ' . $row["agent_l_name"] . '</h3>
-                            <span class="email">' . $row["agent_email"] . '</span>
-                            <p class="expertise">' . $row["field_expertise"] . '</p>
+                            <h3>' . $escape($row["agent_f_name"]) . ' ' . $escape($row["agent_l_name"]) . '</h3>
+                            <span class="email">' . $escape($row["agent_email"]) . '</span>
+                            <p class="expertise">' . $escape($row["field_expertise"]) . '</p>
                         </div>
                     </div>
 
 
-                    <span class="status ' . $row["status"] . '">' . $row["status"] . '</span>
+                    <span class="status ' . $escape($row["status"]) . '">' . $escape($row["status"]) . '</span>
                 </div>
 
                 <!-- Personal Information -->
                 <div class="profile_section">
                     <h4>Personal Information</h4>
                     <div class="info_grid">
-                        <p><strong>Full Name: </strong> ' . $row["agent_f_name"] . ' ' . $row["agent_l_name"] . '</p>
-                        <p><strong>Email: </strong> ' . $row["agent_email"] . '</p>
-                        <p><strong>Phone: </strong> ' . $row["contact"] . '</p>
-                        <p><strong>State: </strong> ' . $row["country"] . '</p>
-                        <p><strong>City: </strong> ' . $row["city"] . '</p>
+                        <p><strong>Full Name: </strong> ' . $escape($row["agent_f_name"]) . ' ' . $escape($row["agent_l_name"]) . '</p>
+                        <p><strong>Email: </strong> ' . $escape($row["agent_email"]) . '</p>
+                        <p><strong>Phone: </strong> ' . $escape($row["contact"]) . '</p>
+                        <p><strong>State: </strong> ' . $escape($row["country"]) . '</p>
+                        <p><strong>City: </strong> ' . $escape($row["city"]) . '</p>
                     </div>
                 </div>
 
@@ -89,10 +95,10 @@ session_start();
                 <div class="profile_section">
                     <h4>Professional Information</h4>
                     <div class="info_grid">
-                        <p><strong>Expertise: </strong>' . $row["field_expertise"] . '</p>
-                        <p><strong>Experience: </strong> ' . $row["experience"] . ' Years</p>
-                        <p><strong>Organization: </strong>' . $row["org_name"] . '</p>
-                        <p><strong>LinkedIn: </strong>' . $row["agent_weblink"] . '</p>
+                        <p><strong>Expertise: </strong>' . $escape($row["field_expertise"]) . '</p>
+                        <p><strong>Experience: </strong> ' . (int)$row["experience"] . ' Years</p>
+                        <p><strong>Organization: </strong>' . $escape($row["org_name"]) . '</p>
+                        <p><strong>LinkedIn: </strong>' . $escape($row["agent_weblink"]) . '</p>
                     </div>
                 </div>
 
@@ -100,9 +106,9 @@ session_start();
                 <div class="profile_section">
                     <h4>Verification Documents</h4>
                     <div class="documents">
-                        <a href="../../uploads/profiles/'.$row["cnic"].'" class="doc_btn">CNIC</a>
-                        <a href="../../uploads/profiles/'.$row["resume"].'" class="doc_btn">Resume</a>
-                        <a href="../../uploads/profiles/'.$row["certificate"].'" class="doc_btn">Certificates</a>
+                        <a href="download_document.php?agent_account_id='.$agent_account_id.'&document=cnic" class="doc_btn">CNIC</a>
+                        <a href="download_document.php?agent_account_id='.$agent_account_id.'&document=resume" class="doc_btn">Resume</a>
+                        <a href="download_document.php?agent_account_id='.$agent_account_id.'&document=certificate" class="doc_btn">Certificates</a>
                     </div>
                 </div>
 
@@ -111,45 +117,42 @@ session_start();
                     <h4>Account Information</h4>
                     <div class="info_grid">
                         <p><strong>Agent ID: </strong> 00' . $row["agent_account_id"] . '</p>
-                        <p><strong>Status: </strong> ' . $row["status"] . '</p>
-                        <p><strong>Registration Date: </strong> ' . $row["creation_date"] . '</p>
+                        <p><strong>Status: </strong> ' . $escape($row["status"]) . '</p>
+                        <p><strong>Registration Date: </strong> ' . $escape($row["creation_date"]) . '</p>
                     </div>
                 </div>
 
                 <div class="profile_actions">';
-                    $logged_id = $_SESSION['id'];
-                    $check_type = "SELECT entity_type FROM `accounts` WHERE id = '$logged_id'";
-                    $type_result = mysqli_query($conn, $check_type);
-                    $type_row = mysqli_fetch_assoc($type_result);
-                    if ($type_row['entity_type'] == 'agent') {
+                    if ($viewerRole === 'agent') {
                         echo
                                 '<a href="../mentor/update_profile.php?agent_account_id=' . $agent_account_id . '" class="approve_btn">Update Profile</a>
-                                <a href="../admin/delete_agent.php?agent_account_id=' . $agent_account_id . '" class="block_btn">Delete</a>
+                                <form action="../admin/delete_agent.php" method="post"><input type="hidden" name="csrf_token" value="' . htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="agent_account_id" value="' . $agent_account_id . '"><button class="block_btn" type="submit">Delete</button></form>
                             <a href="../mentor/agent_portal.php" class="back_btn">Back to Home</a>
                      </div>';
-                    } else if ($type_row['entity_type'] == 'admin') {
+                    } elseif ($viewerRole === 'admin') {
                         if ($row["status"] == "Pending") {
                             echo
-                            '<a href="../admin/approve_agent.php?agent_account_id=' . $agent_account_id . '" class="approve_btn">Approve</a>
-                        <a href="../admin/delete_agent.php?agent_account_id=' . $agent_account_id . '" class="block_btn">Delete</a>
+                            '<form action="../admin/approve_agent.php" method="post"><input type="hidden" name="csrf_token" value="' . htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="agent_account_id" value="' . $agent_account_id . '"><button class="approve_btn" type="submit">Approve</button></form>
+                        <form action="../admin/delete_agent.php" method="post"><input type="hidden" name="csrf_token" value="' . htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="agent_account_id" value="' . $agent_account_id . '"><button class="block_btn" type="submit">Delete</button></form>
                      <a href="./agent_profiles.php" class="back_btn">Back to Agents</a>
                      </div>';
                         } else if ($row["status"] == "Approved") {
-                                     echo ' <a href="../admin/block_agent.php?agent_account_id=' . $agent_account_id . '" class="block_btn">Block</a>
-                                 <a href="../admin/delete_agent.php?agent_account_id=' . $agent_account_id . '" class="block_btn">Delete</a>
+                                     echo ' <form action="../admin/block_agent.php" method="post"><input type="hidden" name="csrf_token" value="' . htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="agent_account_id" value="' . $agent_account_id . '"><button class="block_btn" type="submit">Block</button></form>
+                                 <form action="../admin/delete_agent.php" method="post"><input type="hidden" name="csrf_token" value="' . htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="agent_account_id" value="' . $agent_account_id . '"><button class="block_btn" type="submit">Delete</button></form>
                           <a href="./agent_profiles.php" class="back_btn">Back to Agents</a>
                 </div>';
                         } else if ($row["status"] == "Blocked") {
-                                     echo '<a href="../admin/block_agent.php?agent_account_id=' . $agent_account_id . '" class="reject_btn">Unblock</a>
-                                 <a href="../admin/delete_agent.php?agent_account_id=' . $agent_account_id . '" class="block_btn">Delete</a>
+                                     echo '<form action="../admin/block_agent.php" method="post"><input type="hidden" name="csrf_token" value="' . htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="agent_account_id" value="' . $agent_account_id . '"><button class="reject_btn" type="submit">Unblock</button></form>
+                                 <form action="../admin/delete_agent.php" method="post"><input type="hidden" name="csrf_token" value="' . htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="agent_account_id" value="' . $agent_account_id . '"><button class="block_btn" type="submit">Delete</button></form>
                           <a href="./agent_profiles.php" class="back_btn">Back to Agents</a>
                           </div>';
                         } else if ($row["status"] == "Rejected") {
-                            echo ' <a href="../admin/delete_agent.php?agent_account_id=' . $agent_account_id . '" class="block_btn">Delete</a>
-                        <a href="../admin/block_agent.php?agent_account_id=' . $agent_account_id . '" class="block_btn">Block</a>
+                            echo ' <form action="../admin/delete_agent.php" method="post"><input type="hidden" name="csrf_token" value="' . htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="agent_account_id" value="' . $agent_account_id . '"><button class="block_btn" type="submit">Delete</button></form>
+                        <form action="../admin/block_agent.php" method="post"><input type="hidden" name="csrf_token" value="' . htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="agent_account_id" value="' . $agent_account_id . '"><button class="block_btn" type="submit">Block</button></form>
                           <a href="./agent_profiles.php" class="back_btn">Back to Agents</a>
                           </div>';
                         }
+                        $profileStatement->close();
                     }
                 }
                 ?>

@@ -1,11 +1,22 @@
  <?php
     session_start();
     require_once __DIR__ . '/../../config/database.php';
+    require_once __DIR__ . '/../../config/security.php';
+    $viewerRole = requireAccountRole($conn, ['agent']);
+    $viewerId = (int)$_SESSION['id'];
+    $csrfToken = htmlspecialchars(csrfToken(), ENT_QUOTES, 'UTF-8');
 
-    $query = "";
-    if (isset($_GET['q'])) {
-        $query = mysqli_real_escape_string($conn, $_GET['q']);
+    $query = $_GET['q'] ?? '';
+    if (!is_string($query)) {
+        http_response_code(400);
+        exit('Invalid search query.');
     }
+    $pattern = '%' . $query . '%';
+    $statement = $conn->prepare('SELECT * FROM business_ideas WHERE user_id = ? AND (idea_title LIKE ? OR idea_category LIKE ? OR problem_statement LIKE ? OR keywords LIKE ?)');
+    $statement->bind_param('issss', $viewerId, $pattern, $pattern, $pattern, $pattern);
+    $statement->execute();
+    $ideas = $statement->get_result();
+    $escape = static fn($value) => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
     ?>
  <!DOCTYPE html>
  <html lang="en">
@@ -33,52 +44,38 @@
                      <button id="search_button"><i class="fas fa-search"></i></button>
                  </form>
              </div>
-             <?php echo '<h1 class="search_keyword">Search results for " ' . $query . ' "'; ?>
+             <?php echo '<h1 class="search_keyword">Search results for " ' . $escape($query) . ' "'; ?>
 
              <?php
                 if (isset($_GET['alert'])) {
                     $alert = $_GET['alert'];
-                    echo '<p id="alert_message">' . $alert . '</p>';
+                    echo '<p id="alert_message">' . $escape($alert) . '</p>';
                     unset($alert);
                 }
                 ?>
              <div class="dashboard" style="margin-top: 20px;">
                  <div class="card_container">
                      <?php
-                        $sql = "SELECT * FROM business_ideas 
-              WHERE idea_title LIKE '%$query%' 
-              OR idea_category LIKE '%$query%'
-              OR problem_statement LIKE '%$query%'
-              OR keywords LIKE '%$query%'";
-
-                        $result = mysqli_query($conn, $sql);
-                        if (mysqli_num_rows($result) == 0) {
+                            if ($ideas->num_rows === 0) {
                             echo '<div class="card">
                                         <p>No result found</p>
                                         </div>';
                         }
-                        while ($row = mysqli_fetch_assoc($result)) {
+                        while ($row = $ideas->fetch_assoc()) {
                             $business_idea_id = (int)$row["id"];
                             $agent_profile_id = (int)$row["user_id"];
-                            $agent_id = $_SESSION['id'];
-                            $sql2 = "SELECT * FROM `profiles` WHERE agent_account_id='$agent_id'";
-                            $result2 = mysqli_query($conn, $sql2);
-                            while ($row2 = mysqli_fetch_assoc($result2)) {
-                                $field_expertise = $row2["field_expertise"];
-                                $agent_name = $row2["agent_f_name"] . ' ' . $row2["agent_l_name"];
-                            }
                             echo ' <div class="card">
-                                        <h2>' . $row["idea_title"] . '</h2>
-                                        <p>' . $row["problem_statement"] . '</p>
+                                        <h2>' . $escape($row["idea_title"]) . '</h2>
+                                        <p>' . $escape($row["problem_statement"]) . '</p>
                                         <div class="buttons">
-                                        <a href="../ideas/idea_details.php?business_idea_id=' . $business_idea_id . '&agent_profile_id=' . $agent_profile_id . '" class="explore_btn">Explore</a>
-                                        <a href="../mentor/update_idea.php?business_idea_id=' . $business_idea_id . '&agent_profile_id=' . $agent_profile_id . '" class="edit_idea">Edit</a>
-                                        <a href="../admin/delete_idea.php?business_idea_id=' . $business_idea_id . '&agent_profile_id=' . $agent_profile_id . '" class="delete_idea">Delete</a>
-                                        <p class="status status_' . $row["status"] . '">' . $row["status"] . '</p>
+                                        <a href="../ideas/idea_details.php?business_idea_id=' . $business_idea_id . '" class="explore_btn">Explore</a>
+                                        <a href="../mentor/update_idea.php?business_idea_id=' . $business_idea_id . '" class="edit_idea">Edit</a>
+                                        <form action="../admin/delete_idea.php" method="post"><input type="hidden" name="csrf_token" value="' . $csrfToken . '"><input type="hidden" name="business_idea_id" value="' . $business_idea_id . '"><button class="delete_idea" type="submit">Delete</button></form>
+                                        <p class="status status_' . $escape($row["status"]) . '">' . $escape($row["status"]) . '</p>
                                         </div>
                                         </div>';
                         }
-
+                        $statement->close();
                         ?>
                  </div>
              </div>

@@ -1,12 +1,31 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
- $rawAgentAccountId = $_GET['agent_profile_id'] ?? null;
-if (!is_string($rawAgentAccountId) || !preg_match('/\A[0-9]+\z/', $rawAgentAccountId) || (int)$rawAgentAccountId < 1 || (string)(int)$rawAgentAccountId !== ltrim($rawAgentAccountId, '0')) {
+require_once __DIR__ . '/../../config/security.php';
+$viewerRole = requireAccountRole($conn, ['admin', 'agent', 'user']);
+$csrfToken = csrfToken();
+$agent_profile_id = requestPositiveId($_GET['agent_profile_id'] ?? null);
+if ($agent_profile_id === null) {
     http_response_code(400);
     exit('Invalid agent request.');
 }
-$agent_profile_id = (int)$rawAgentAccountId;
+$viewerId = (int)$_SESSION['id'];
+$profileStatement = $conn->prepare('SELECT * FROM profiles WHERE agent_account_id = ? LIMIT 1');
+$profileStatement->bind_param('i', $agent_profile_id);
+$profileStatement->execute();
+$agentProfile = $profileStatement->get_result()->fetch_assoc();
+$profileStatement->close();
+$agentAccountStatement = $conn->prepare("SELECT 1 FROM accounts WHERE id = ? AND entity_type = 'agent' AND status = 'Active' LIMIT 1");
+$agentAccountStatement->bind_param('i', $agent_profile_id);
+$agentAccountStatement->execute();
+$agentAccountIsActive = $agentAccountStatement->get_result()->num_rows > 0;
+$agentAccountStatement->close();
+if (!$agentProfile || !$agentAccountIsActive || ($agentProfile['status'] !== 'Approved' && $viewerRole !== 'admin' && $viewerId !== $agent_profile_id)) {
+    http_response_code(404);
+    exit('Agent not found.');
+}
+$viewerCanEngage = $viewerRole !== 'admin' && $viewerId !== $agent_profile_id;
+$escape = static fn($value) => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -33,51 +52,48 @@ $agent_profile_id = (int)$rawAgentAccountId;
             <?php
             if (isset($_GET['alert'])) {
                 $alert = $_GET['alert'];
-                echo '<p id="alert_message">' . $alert . '</p>';
+                echo '<p id="alert_message">' . $escape($alert) . '</p>';
                 unset($alert);
             }
             ?>
             <div class="profile_section">
 
                 <?php
-                if (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] == true) {
-                    $sql = "SELECT * FROM `profiles` WHERE agent_account_id = '$agent_profile_id'";
-                    $result = mysqli_query($conn, $sql);
-                    $numRows = mysqli_num_rows($result);
-                    if ($numRows > 0) {
-                        while ($row = mysqli_fetch_array($result)) {
+                if ($agentProfile) {
+                        $row = $agentProfile;
                             echo '<div class="profile_card">
                             <div class="profile_image">
-                            <img src="../../uploads/profiles/' . $row["profile_image"] . '" alt="Agent Profile">
+                            <img src="profile_image.php?agent_account_id=' . (int)$agent_profile_id . '" alt="Agent Profile">
                             </div>
                             <div class="profile_info">
-                            <h2>' . $row["agent_f_name"] . ' ' . $row["agent_l_name"] . '</h2>
-                            <p><strong>Email: </strong> <a href="#">' . $row["agent_email"] . '</a></p>
-                            <p><strong>Phone: </strong>' . $row["contact"] . '</p>
-                            <p><strong>Location: </strong>' . $row["city"] . '</p>
-                            <p><strong>Bio: </strong>' . $row["agent_bio"] . '</p></div></div>';
-                        }
-                    }
-                };
+                            <h2>' . $escape($row["agent_f_name"]) . ' ' . $escape($row["agent_l_name"]) . '</h2>
+                            <p><strong>Email: </strong> <a href="#">' . $escape($row["agent_email"]) . '</a></p>
+                            <p><strong>Phone: </strong>' . $escape($row["contact"]) . '</p>
+                            <p><strong>Location: </strong>' . $escape($row["city"]) . '</p>
+                            <p><strong>Bio: </strong>' . $escape($row["agent_bio"]) . '</p></div></div>';
+                }
                 ?>
                 <!-- Engagement Section -->
                 <div class="engagement_stats">
                     <?php
                     // Check if engagement_stats row exists for this agent
-                    $check_sql = "SELECT * FROM engagement_stats WHERE agent_profile_id='$agent_profile_id'";
-                    $check_result = mysqli_query($conn, $check_sql);
-
-                    if (mysqli_num_rows($check_result) == 0) {
-                        // Create engagement_stats row if it doesn't exist
-                        $insert_sql = "INSERT INTO engagement_stats (agent_profile_id, likes, followers, rating, total_ratings)
-                                     VALUES ('$agent_profile_id', 0, 0, 0, 0)";
-                        mysqli_query($conn, $insert_sql);
+                    $checkStatement = $conn->prepare('SELECT 1 FROM engagement_stats WHERE agent_profile_id = ? LIMIT 1');
+                    $checkStatement->bind_param('i', $agent_profile_id);
+                    $checkStatement->execute();
+                    $statsExist = $checkStatement->get_result()->num_rows > 0;
+                    $checkStatement->close();
+                    if (!$statsExist) {
+                        $insertStatement = $conn->prepare('INSERT INTO engagement_stats (agent_profile_id, likes, followers, rating, total_ratings) VALUES (?, 0, 0, 0, 0)');
+                        $insertStatement->bind_param('i', $agent_profile_id);
+                        $insertStatement->execute();
+                        $insertStatement->close();
                     }
 
-                    // Now get the stats
-                    $sql = "SELECT * FROM engagement_stats WHERE agent_profile_id='$agent_profile_id'";
-                    $result = mysqli_query($conn, $sql);
-                    $row = mysqli_fetch_assoc($result);
+                    $statsStatement = $conn->prepare('SELECT * FROM engagement_stats WHERE agent_profile_id = ? LIMIT 1');
+                    $statsStatement->bind_param('i', $agent_profile_id);
+                    $statsStatement->execute();
+                    $row = $statsStatement->get_result()->fetch_assoc();
+                    $statsStatement->close();
 
                     echo '   <div class="stat_box">
                         ⭐ <span>' . number_format($row["rating"], 1) . '</span>
@@ -98,86 +114,84 @@ $agent_profile_id = (int)$rawAgentAccountId;
                 <!-- Buttons -->
                 <div class="profile_actions">
                     <?php
-                    $user_id = $_SESSION['id'];
-
-                    // Check if user has already liked
-                    $like_check = mysqli_query($conn, "SELECT id FROM user_likes WHERE user_id='$user_id' AND agent_profile_id='$agent_profile_id'");
-                    $has_liked = mysqli_num_rows($like_check) > 0;
-
-                    // Check if user is already following
-                    $follow_check = mysqli_query($conn, "SELECT id FROM user_follows WHERE user_id='$user_id' AND agent_profile_id='$agent_profile_id'");
-                    $is_following = mysqli_num_rows($follow_check) > 0;
-
-                    // Check if user has already rated
-                    $rate_check = mysqli_query($conn, "SELECT rating FROM user_ratings WHERE user_id='$user_id' AND agent_profile_id='$agent_profile_id'");
-                    $has_rated = mysqli_num_rows($rate_check) > 0;
-                    $user_rating = $has_rated ? mysqli_fetch_assoc($rate_check)['rating'] : 0;
+                    $user_id = $viewerId;
+                    $likeStatement = $conn->prepare('SELECT id FROM user_likes WHERE user_id = ? AND agent_profile_id = ? LIMIT 1');
+                    $likeStatement->bind_param('ii', $user_id, $agent_profile_id);
+                    $likeStatement->execute();
+                    $has_liked = $likeStatement->get_result()->num_rows > 0;
+                    $likeStatement->close();
+                    $followStatement = $conn->prepare('SELECT id FROM user_follows WHERE user_id = ? AND agent_profile_id = ? LIMIT 1');
+                    $followStatement->bind_param('ii', $user_id, $agent_profile_id);
+                    $followStatement->execute();
+                    $is_following = $followStatement->get_result()->num_rows > 0;
+                    $followStatement->close();
+                    $rateStatement = $conn->prepare('SELECT rating FROM user_ratings WHERE user_id = ? AND agent_profile_id = ? LIMIT 1');
+                    $rateStatement->bind_param('ii', $user_id, $agent_profile_id);
+                    $rateStatement->execute();
+                    $ratedRow = $rateStatement->get_result()->fetch_assoc();
+                    $rateStatement->close();
+                    $has_rated = (bool)$ratedRow;
+                    $user_rating = $ratedRow['rating'] ?? 0;
                     ?>
 
-                    <?php if ($has_liked): ?>
+                    <?php if (!$viewerCanEngage): ?>
+                    <?php elseif ($has_liked): ?>
                         <button class="like_btn liked" disabled>You Liked</button>
                     <?php else: ?>
-                        <a href="../actions/like.php?agent_profile_id=<?php echo $agent_profile_id; ?>">
-                            <button class="like_btn">Like</button>
-                        </a>
+                        <form action="../actions/like.php" method="post"><input type="hidden" name="csrf_token" value="<?php echo $escape($csrfToken); ?>"><input type="hidden" name="agent_profile_id" value="<?php echo $agent_profile_id; ?>"><button class="like_btn" type="submit">Like</button></form>
                     <?php endif; ?>
 
-                    <?php if ($is_following): ?>
+                    <?php if (!$viewerCanEngage): ?>
+                    <?php elseif ($is_following): ?>
                         <button class="follow_btn following" disabled>Following</button>
                     <?php else: ?>
-                        <a href="../actions/follow.php?agent_profile_id=<?php echo $agent_profile_id; ?>">
-                            <button class="follow_btn">Follow</button>
-                        </a>
+                        <form action="../actions/follow.php" method="post"><input type="hidden" name="csrf_token" value="<?php echo $escape($csrfToken); ?>"><input type="hidden" name="agent_profile_id" value="<?php echo $agent_profile_id; ?>"><button class="follow_btn" type="submit">Follow</button></form>
                     <?php endif; ?>
                 </div>
 
                 <!-- Rating Section -->
-                <div class="rating_section">
-                    <h3>Rate this Agent</h3>
-                    <?php if ($has_rated): ?>
-                        <div class="stars">
-                            <?php for ($i = 1; $i <= 5; $i++): ?>
-                                <span class="star <?php echo $i <= $user_rating ? 'selected' : ''; ?>" data-value="<?php echo $i; ?>">★</span>
-                            <?php endfor; ?>
-                        </div>
-                        <p class="rating_message">You rated this agent <?php echo $user_rating; ?> stars</p>
-                    <?php else: ?>
-                        <div class="stars">
-                            <?php for ($i = 1; $i <= 5; $i++): ?>
-                                <span class="star" data-value="<?php echo $i; ?>">★</span>
-                            <?php endfor; ?>
-                        </div>
-                        <p class="rating_message">Click on stars to rate</p>
-                    <?php endif; ?>
-                </div>
+                <?php if ($viewerCanEngage): ?>
+                    <div class="rating_section">
+                        <h3>Rate this Agent</h3>
+                        <?php if ($has_rated): ?>
+                            <div class="stars">
+                                <?php for ($i = 1; $i <= 5; $i++): ?>
+                                    <span class="star <?php echo $i <= $user_rating ? 'selected' : ''; ?>" data-value="<?php echo $i; ?>">★</span>
+                                <?php endfor; ?>
+                            </div>
+                            <p class="rating_message">You rated this agent <?php echo (int)$user_rating; ?> stars</p>
+                        <?php else: ?>
+                            <div class="stars">
+                                <?php for ($i = 1; $i <= 5; $i++): ?>
+                                    <span class="star" data-value="<?php echo $i; ?>">★</span>
+                                <?php endfor; ?>
+                            </div>
+                            <p class="rating_message">Click on stars to rate</p>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
             </div>
             <div class="card_container">
                 <?php
-                if (isset($_SESSION["loggedin"]) && $_SESSION["loggedin"] == true) {
-                    $agent_id = $_SESSION["id"];
-
-
-                    $sql2 = "SELECT * FROM `accounts` WHERE id='$agent_id'";
-                    $result2 = mysqli_query($conn, $sql2);
-                    $row2 = mysqli_fetch_assoc($result2);
-                    if ($row2['entity_type'] === 'agent') {
-
-                        $sql = "SELECT * FROM `profiles` WHERE `agent_account_id` = '$agent_id'";
-                        $result = mysqli_query($conn, $sql);
-                        $numRows = mysqli_num_rows($result);
-                        $row = mysqli_fetch_assoc($result);
+                if ($viewerRole === 'agent') {
+                $agent_id = $viewerId;
+                $ownProfileStatement = $conn->prepare('SELECT status FROM profiles WHERE agent_account_id = ? LIMIT 1');
+                $ownProfileStatement->bind_param('i', $agent_id);
+                $ownProfileStatement->execute();
+                $ownProfile = $ownProfileStatement->get_result()->fetch_assoc();
+                $ownProfileStatement->close();
 
                         echo '  <div class="add_card">
                         <h2>Add New Business Domain</h2>';
 
 
-                        if ($numRows == 0) {
+                        if (!$ownProfile) {
                             $url = '../mentor/create_profile.php';
                             echo '<a href="' . $url . '" class="explore_btn"><i class="fas fa-plus"></i></a>';
                         } else {
-                            if ($row["status"] == "Pending") {
+                            if ($ownProfile["status"] == "Pending") {
                                 echo "Your profile is pending for admin approval.";
-                            } else if ($row["status"] == "Blocked") {
+                            } else if ($ownProfile["status"] == "Blocked") {
                                 echo "Your profile is Blocked. Please wait for admin approval.";
                             } else {
                                 $url = '../mentor/add_business_domain.php';
@@ -185,7 +199,6 @@ $agent_profile_id = (int)$rawAgentAccountId;
                             }
                         }
                     }
-                }
                 ?>
             </div>
 
@@ -193,19 +206,26 @@ $agent_profile_id = (int)$rawAgentAccountId;
             <h1>List of all my approved ideas</h1>
             <div class="ideas_list">
                 <?php
-                $sql = "SELECT * FROM `business_ideas` WHERE `user_id`='$agent_profile_id' AND `status`='Approved'";
-                $result = mysqli_query($conn, $sql);
-                $numRows = mysqli_num_rows($result);
-                if ($numRows == 0) {
+                if ($viewerRole === 'admin' || $viewerId === $agent_profile_id) {
+                    $ideasStatement = $conn->prepare("SELECT * FROM business_ideas WHERE user_id = ? AND status = 'Approved' ORDER BY id DESC");
+                    $ideasStatement->bind_param('i', $agent_profile_id);
+                } elseif ($viewerRole === 'agent') {
+                    $ideasStatement = $conn->prepare("SELECT * FROM business_ideas WHERE user_id = ? AND status = 'Approved' AND visibility IN ('Public', 'Mentors Only') ORDER BY id DESC");
+                    $ideasStatement->bind_param('i', $agent_profile_id);
+                } else {
+                    $ideasStatement = $conn->prepare("SELECT * FROM business_ideas WHERE user_id = ? AND status = 'Approved' AND visibility = 'Public' ORDER BY id DESC");
+                    $ideasStatement->bind_param('i', $agent_profile_id);
+                }
+                $ideasStatement->execute();
+                $result = $ideasStatement->get_result();
+                if ($result->num_rows === 0) {
                     echo '<div class="card">
                         <h2>No business template exist.</h2>
                         <p>No approved idea exists.</p>
                     </div>';
                 }
-                while ($row = mysqli_fetch_assoc($result)) {
-                    $sql = "SELECT entity_type FROM `accounts` WHERE id='$user_id'";
-                    $result_entity = mysqli_query($conn, $sql);
-                    $entity_type = mysqli_fetch_assoc($result_entity)['entity_type'];
+                while ($row = $result->fetch_assoc()) {
+                    $entity_type = $viewerRole;
                     if ($entity_type == 'user') {
                         $link_to_page = '../ideas/idea_details.php?business_idea_id=' . (int)$row['id'] . '&agent_profile_id=' . (int)$row['user_id'];
                     } else if ($entity_type == 'agent') {
@@ -214,14 +234,15 @@ $agent_profile_id = (int)$rawAgentAccountId;
                         $link_to_page = '../ideas/idea_details.php?business_idea_id=' . (int)$row['id'] . '&agent_profile_id=' . (int)$row['user_id'];
                     }
                     echo ' <div class="card">
-                        <h2>' . $row["idea_title"] . '</h2>
-                        <p>' . $row["problem_statement"] . '</p>
+                        <h2>' . $escape($row["idea_title"]) . '</h2>
+                        <p>' . $escape($row["problem_statement"]) . '</p>
                         <div class="card_bottom">
                             <a href="' . $link_to_page . '" class="explore_btn">Explore</a>
-                            <span class="category">' . $row["idea_category"] . '</span>
+                            <span class="category">' . $escape($row["idea_category"]) . '</span>
                         </div>
                     </div>';
                 };
+                $ideasStatement->close();
                 ?>
             </div>
 
@@ -238,17 +259,26 @@ $agent_profile_id = (int)$rawAgentAccountId;
         document.querySelectorAll(".star").forEach(star => {
             star.addEventListener("click", function() {
                 // Check if user has already rated (by checking if stars are already selected)
-                const hasRated = document.querySelector('.rating_message').textContent.includes('You rated this agent');
+                const message = document.querySelector('.rating_message');
+                const hasRated = message && message.textContent.includes('You rated this agent');
 
                 if (hasRated) {
                     alert('You have already rated this agent');
                     return;
                 }
 
-                let rating = this.getAttribute("data-value");
-                let id = "<?php echo $agent_profile_id; ?>";
-
-                window.location.href = "../actions/rate.php?id=" + id + "&rating=" + rating;
+                const form = document.createElement("form");
+                form.method = "post";
+                form.action = "../actions/rate.php";
+                [["csrf_token", "<?php echo $escape($csrfToken); ?>"], ["agent_profile_id", "<?php echo $agent_profile_id; ?>"], ["rating", this.getAttribute("data-value")]].forEach(([name, value]) => {
+                    const input = document.createElement("input");
+                    input.type = "hidden";
+                    input.name = name;
+                    input.value = value;
+                    form.appendChild(input);
+                });
+                document.body.appendChild(form);
+                form.submit();
             });
         });
     </script>

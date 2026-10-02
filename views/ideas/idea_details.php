@@ -1,23 +1,11 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../config/security.php';
 
-if (empty($_SESSION['loggedin']) || empty($_SESSION['id'])) {
-    http_response_code(403);
-    exit('Please sign in to view this idea.');
-}
-
+$role = requireAccountRole($conn, ['admin', 'agent', 'user']);
 $accountId = (int)$_SESSION['id'];
-$roleStatement = $conn->prepare('SELECT entity_type FROM accounts WHERE id = ?');
-$roleStatement->bind_param('i', $accountId);
-$roleStatement->execute();
-$account = $roleStatement->get_result()->fetch_assoc();
-$roleStatement->close();
-$role = $account['entity_type'] ?? '';
-if (!in_array($role, ['admin', 'agent', 'user'], true)) {
-    http_response_code(403);
-    exit('Access denied.');
-}
+$csrfToken = csrfToken();
 
 $rawIdeaId = $_GET['business_idea_id'] ?? null;
 if (!is_string($rawIdeaId) || !preg_match('/\A[0-9]+\z/', $rawIdeaId) || (int)$rawIdeaId < 1 || (string)(int)$rawIdeaId !== ltrim($rawIdeaId, '0')) {
@@ -31,7 +19,10 @@ $ideaStatement->bind_param('i', $ideaId);
 $ideaStatement->execute();
 $idea = $ideaStatement->get_result()->fetch_assoc();
 $ideaStatement->close();
-if (!$idea || ($role === 'user' && $idea['status'] !== 'Approved')) {
+$isOwner = $role === 'agent' && $idea && (int)$idea['user_id'] === $accountId;
+$isPublishedPublic = $idea && $idea['status'] === 'Approved' && $idea['visibility'] === 'Public';
+$isPublishedForMentors = $idea && $idea['status'] === 'Approved' && $idea['visibility'] === 'Mentors Only' && $role === 'agent';
+if (!$idea || ($role !== 'admin' && !$isOwner && !$isPublishedPublic && !$isPublishedForMentors)) {
     http_response_code(404);
     exit('Idea not found.');
 }
@@ -107,7 +98,7 @@ $reviews = $reviewsStatement->get_result();
             <?php if ($agent): ?>
                 <div class="profile_section">
                     <div class="profile_card">
-                        <div class="profile_image"><img src="../../uploads/profiles/<?php echo rawurlencode($agent['profile_image']); ?>" alt="Agent profile"></div>
+                        <div class="profile_image"><img src="../profiles/profile_image.php?agent_account_id=<?php echo $agentAccountId; ?>" alt="Agent profile"></div>
                         <div class="profile_info">
                             <h2><?php echo $escape($agent['agent_f_name'] . ' ' . $agent['agent_l_name']); ?></h2>
                             <p><strong>Email: </strong><?php echo $escape($agent['agent_email']); ?></p>
@@ -135,12 +126,12 @@ $reviews = $reviewsStatement->get_result();
                                 <?php if ($hasLiked): ?>
                                     <button class="like_btn liked" disabled>You Liked</button>
                                 <?php else: ?>
-                                    <a href="../actions/like.php?agent_profile_id=<?php echo $agentAccountId; ?>" class="like_btn">Like</a>
+                                    <form action="../actions/like.php" method="post"><input type="hidden" name="csrf_token" value="<?php echo $escape($csrfToken); ?>"><input type="hidden" name="agent_profile_id" value="<?php echo $agentAccountId; ?>"><button class="like_btn" type="submit">Like</button></form>
                                 <?php endif; ?>
                                 <?php if ($isFollowing): ?>
                                     <button class="follow_btn following" disabled>Following</button>
                                 <?php else: ?>
-                                    <a href="../actions/follow.php?agent_profile_id=<?php echo $agentAccountId; ?>" class="follow_btn">Follow</a>
+                                    <form action="../actions/follow.php" method="post"><input type="hidden" name="csrf_token" value="<?php echo $escape($csrfToken); ?>"><input type="hidden" name="agent_profile_id" value="<?php echo $agentAccountId; ?>"><button class="follow_btn" type="submit">Follow</button></form>
                                 <?php endif; ?>
                             </div>
                             <?php if (!$hasRated): ?>
@@ -183,15 +174,15 @@ $reviews = $reviewsStatement->get_result();
                 <div class="profile_actions">
                     <?php if ($role === 'admin'): ?>
                         <?php if ($idea['status'] === 'Pending'): ?>
-                            <a href="../admin/approve_idea.php?business_idea_id=<?php echo $ideaId; ?>" class="approve_btn">Approve</a>
-                            <a href="../admin/reject_idea.php?business_idea_id=<?php echo $ideaId; ?>" class="reject_btn">Reject</a>
+                            <form action="../admin/approve_idea.php" method="post"><input type="hidden" name="csrf_token" value="<?php echo $escape($csrfToken); ?>"><input type="hidden" name="business_idea_id" value="<?php echo $ideaId; ?>"><button class="approve_btn" type="submit">Approve</button></form>
+                            <form action="../admin/reject_idea.php" method="post"><input type="hidden" name="csrf_token" value="<?php echo $escape($csrfToken); ?>"><input type="hidden" name="business_idea_id" value="<?php echo $ideaId; ?>"><button class="reject_btn" type="submit">Reject</button></form>
                         <?php else: ?>
-                            <a href="../admin/delete_idea.php?business_idea_id=<?php echo $ideaId; ?>" class="block_btn">Delete</a>
+                            <form action="../admin/delete_idea.php" method="post"><input type="hidden" name="csrf_token" value="<?php echo $escape($csrfToken); ?>"><input type="hidden" name="business_idea_id" value="<?php echo $ideaId; ?>"><button class="block_btn" type="submit">Delete</button></form>
                         <?php endif; ?>
                         <a href="ideas_list.php" class="back_btn">Back to ideas</a>
                     <?php elseif ($isOwner): ?>
                         <a href="../mentor/update_idea.php?business_idea_id=<?php echo $ideaId; ?>" class="approve_btn">Update</a>
-                        <a href="../admin/delete_idea.php?business_idea_id=<?php echo $ideaId; ?>" class="reject_btn">Delete</a>
+                        <form action="../admin/delete_idea.php" method="post"><input type="hidden" name="csrf_token" value="<?php echo $escape($csrfToken); ?>"><input type="hidden" name="business_idea_id" value="<?php echo $ideaId; ?>"><button class="reject_btn" type="submit">Delete</button></form>
                         <a href="../profiles/selected_agent_ideas.php?agent_profile_id=<?php echo $agentAccountId; ?>" class="back_btn">Back to ideas</a>
                     <?php else: ?>
                         <a href="../profiles/selected_agent_ideas.php?agent_profile_id=<?php echo $agentAccountId; ?>" class="back_btn">Back to ideas</a>
@@ -217,7 +208,8 @@ $reviews = $reviewsStatement->get_result();
                     <?php endif; ?>
                 </div>
                 <?php if ($role !== 'admin'): ?>
-                    <form class="add_comment" action="../actions/submit_review.php?business_idea_id=<?php echo $ideaId; ?>&amp;agent_profile_id=<?php echo $agentAccountId; ?>" method="post">
+                    <form class="add_comment" action="../actions/submit_review.php?business_idea_id=<?php echo $ideaId; ?>" method="post">
+                        <input type="hidden" name="csrf_token" value="<?php echo $escape($csrfToken); ?>">
                         <textarea name="review" placeholder="Add your comment here..." required></textarea>
                         <button type="submit">Submit</button>
                     </form>
@@ -233,8 +225,18 @@ $reviews = $reviewsStatement->get_result();
     <script>
         document.querySelectorAll('.star[data-rating]').forEach((star) => {
             star.addEventListener('click', () => {
-                const rating = star.dataset.rating;
-                window.location.href = '../actions/rate.php?id=<?php echo $agentAccountId; ?>&rating=' + encodeURIComponent(rating);
+                const form = document.createElement('form');
+                form.method = 'post';
+                form.action = '../actions/rate.php';
+                [['csrf_token', '<?php echo $escape($csrfToken); ?>'], ['agent_profile_id', '<?php echo $agentAccountId; ?>'], ['rating', star.dataset.rating]].forEach(([name, value]) => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = name;
+                    input.value = value;
+                    form.appendChild(input);
+                });
+                document.body.appendChild(form);
+                form.submit();
             });
         });
     </script>

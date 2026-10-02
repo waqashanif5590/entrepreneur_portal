@@ -1,51 +1,41 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
-if (empty($_SESSION['loggedin']) || empty($_SESSION['id'])) {
-    http_response_code(403);
-    exit('Access denied.');
-}
+require_once __DIR__ . '/../../config/security.php';
 
- $accountId = (int)$_SESSION['id'];
-$roleStatement = $conn->prepare('SELECT entity_type FROM accounts WHERE id = ?');
-$roleStatement->bind_param('i', $accountId);
-$roleStatement->execute();
-$account = $roleStatement->get_result()->fetch_assoc();
-$roleStatement->close();
-if (($account['entity_type'] ?? '') !== 'admin') {
-    http_response_code(403);
-    exit('Access denied.');
-}
-
-$action = $_GET['action'] ?? '';
-$rawForumId = $_GET['forum_id'] ?? null;
-if (!in_array($action, ['approve', 'delete'], true) || !is_string($rawForumId) || !preg_match('/\A[0-9]+\z/', $rawForumId) || (int)$rawForumId < 1 || (string)(int)$rawForumId !== ltrim($rawForumId, '0')) {
+requireAccountRole($conn, ['admin']);
+requirePostCsrfToken();
+$action = $_POST['action'] ?? '';
+$forumId = requestPositiveId($_POST['forum_id'] ?? null);
+if (!in_array($action, ['approve', 'delete'], true) || $forumId === null) {
     http_response_code(400);
     exit('Invalid request.');
 }
-$forumId = (int)$rawForumId;
 
 if ($action === 'approve') {
     $statement = $conn->prepare("UPDATE forums SET status = 'Approved' WHERE id = ? AND status = 'Pending'");
     $statement->bind_param('i', $forumId);
     $statement->execute();
     $alert = $statement->affected_rows ? 'Forum was approved' : 'Forum was not pending';
+    $statement->close();
 } else {
     $conn->begin_transaction();
     $threadStatement = $conn->prepare('DELETE FROM threads WHERE forum_id = ?');
     $threadStatement->bind_param('i', $forumId);
-    $threadStatement->execute();
+    $threadsDeleted = $threadStatement->execute();
+    $threadStatement->close();
     $forumStatement = $conn->prepare('DELETE FROM forums WHERE id = ?');
     $forumStatement->bind_param('i', $forumId);
-    $forumStatement->execute();
-    $conn->commit();
-    $alert = $forumStatement->affected_rows ? 'Forum was deleted' : 'Forum was not found';
-    $threadStatement->close();
+    $forumDeleted = $forumStatement->execute();
     $forumStatement->close();
+    if (!$threadsDeleted || !$forumDeleted) {
+        $conn->rollback();
+        http_response_code(500);
+        exit('Unable to delete forum.');
+    }
+    $conn->commit();
+    $alert = $forumDeleted ? 'Forum was deleted' : 'Forum was not found';
 }
 
-if (isset($statement)) {
-    $statement->close();
-}
 header('Location: ../community/forum_list_shared.php?alert=' . urlencode($alert));
 exit();

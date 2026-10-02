@@ -20,7 +20,7 @@ require_once __DIR__ . '/config/database.php';
         </div>
 
         <div class="profile">
-            <h1>BC220421769</h1>
+            <h1>Guest Mod</h1>
             <div class="profile_icon">
                 <img src="./public/assets/images/profile.png" alt="">
             </div>

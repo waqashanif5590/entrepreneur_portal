@@ -1,6 +1,11 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../config/security.php';
+requireAccountRole($conn, ['agent']);
+$agentAccountId = (int)$_SESSION['id'];
+$csrfToken = htmlspecialchars(csrfToken(), ENT_QUOTES, 'UTF-8');
+$escape = static fn($value) => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -25,7 +30,7 @@ require_once __DIR__ . '/../../config/database.php';
             <?php
             if (isset($_GET['alert'])) {
                 $alert = $_GET['alert'];
-                echo '<p id="alert_message">' . $alert . '</p>';
+                echo '<p id="alert_message">' . $escape($alert) . '</p>';
                 unset($alert);
             }
             ?>
@@ -47,15 +52,12 @@ require_once __DIR__ . '/../../config/database.php';
                             <h2>Total Ideas</h2>
                             <p>
                                 <?php
-                                $agent_profile_id = $_SESSION['id'];
-                                $sql = "SELECT COUNT(*) AS total FROM `business_ideas` WHERE `user_id`='$agent_profile_id'";
-                                $result = mysqli_query($conn, $sql);
-                                if (!$result) {
-                                    echo "Error" . mysqli_error($conn);
-                                } else {
-                                    $row = mysqli_fetch_assoc($result);
-                                    echo $row['total'];
-                                }
+                                $agent_profile_id = $agentAccountId;
+                                $countStatement = $conn->prepare('SELECT COUNT(*) AS total FROM business_ideas WHERE user_id = ?');
+                                $countStatement->bind_param('i', $agent_profile_id);
+                                $countStatement->execute();
+                                echo (int)$countStatement->get_result()->fetch_assoc()['total'];
+                                $countStatement->close();
                                 ?>
                             </p>
                         </div>
@@ -65,14 +67,11 @@ require_once __DIR__ . '/../../config/database.php';
                         <div class="card_content">
                             <h2>Approved Ideas</h2>
                             <p><?php
-                                $sql = "SELECT COUNT(*) AS total_approved FROM `business_ideas` WHERE `user_id`='$agent_profile_id' AND `status` = 'Approved'";
-                                $result = mysqli_query($conn, $sql);
-                                if (!$result) {
-                                    echo "Error: " . mysqli_error($conn);
-                                } else {
-                                    $row = mysqli_fetch_assoc($result);
-                                    echo $row["total_approved"];
-                                }
+                                $countStatement = $conn->prepare("SELECT COUNT(*) AS total_approved FROM business_ideas WHERE user_id = ? AND status = 'Approved'");
+                                $countStatement->bind_param('i', $agent_profile_id);
+                                $countStatement->execute();
+                                echo (int)$countStatement->get_result()->fetch_assoc()['total_approved'];
+                                $countStatement->close();
                                 ?></p>
                         </div>
                         <i class="card-icon fas fa-thumbs-up"></i>
@@ -81,14 +80,11 @@ require_once __DIR__ . '/../../config/database.php';
                         <div class="card_content">
                             <h2>Rejected Ideas</h2>
                             <p><?php
-                                $sql = "SELECT COUNT(*) AS total_approved FROM `business_ideas` WHERE `user_id`='$agent_profile_id' AND `status` = 'Rejected'";
-                                $result = mysqli_query($conn, $sql);
-                                if (!$result) {
-                                    echo "Error: " . mysqli_error($conn);
-                                } else {
-                                    $row = mysqli_fetch_assoc($result);
-                                    echo $row["total_approved"];
-                                }
+                                $countStatement = $conn->prepare("SELECT COUNT(*) AS total_approved FROM business_ideas WHERE user_id = ? AND status = 'Rejected'");
+                                $countStatement->bind_param('i', $agent_profile_id);
+                                $countStatement->execute();
+                                echo (int)$countStatement->get_result()->fetch_assoc()['total_approved'];
+                                $countStatement->close();
                                 ?></p>
                         </div>
                         <i class="card-icon fas fa-thumbs-down"></i>
@@ -97,14 +93,11 @@ require_once __DIR__ . '/../../config/database.php';
                         <div class="card_content">
                             <h2>Pending Ideas</h2>
                             <p><?php
-                                $sql = "SELECT COUNT(*) AS total_approved FROM `business_ideas` WHERE `user_id`='$agent_profile_id' AND `status` = 'Pending'";
-                                $result = mysqli_query($conn, $sql);
-                                if (!$result) {
-                                    echo "Error: " . mysqli_error($conn);
-                                } else {
-                                    $row = mysqli_fetch_assoc($result);
-                                    echo $row["total_approved"];
-                                }
+                                $countStatement = $conn->prepare("SELECT COUNT(*) AS total_approved FROM business_ideas WHERE user_id = ? AND status = 'Pending'");
+                                $countStatement->bind_param('i', $agent_profile_id);
+                                $countStatement->execute();
+                                echo (int)$countStatement->get_result()->fetch_assoc()['total_approved'];
+                                $countStatement->close();
                                 ?></p>
                         </div>
                         <i class="card-icon fas fa-hourglass-half"></i>
@@ -118,11 +111,13 @@ require_once __DIR__ . '/../../config/database.php';
                         <h2>Add New Business Domain</h2>
                         <?php
                         if (isset($_SESSION["loggedin"]) && $_SESSION["loggedin"] == true) {
-                            $agent_id = $_SESSION["id"];
-                            $sql = "SELECT * FROM `profiles` WHERE `agent_account_id` = '$agent_id'";
-                            $result = mysqli_query($conn, $sql);
-                            $numRows = mysqli_num_rows($result);
-                            $row = mysqli_fetch_assoc($result);
+                            $agent_id = $agentAccountId;
+                            $profileStatement = $conn->prepare('SELECT * FROM profiles WHERE agent_account_id = ? LIMIT 1');
+                            $profileStatement->bind_param('i', $agent_id);
+                            $profileStatement->execute();
+                            $row = $profileStatement->get_result()->fetch_assoc();
+                            $numRows = $row ? 1 : 0;
+                            $profileStatement->close();
 
                             if ($numRows == 0) {
                                 $url = './create_profile.php';
@@ -142,44 +137,45 @@ require_once __DIR__ . '/../../config/database.php';
                     </div>
                     <?php
                     if (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] == true) {
-                        $agent_id = $_SESSION["id"];
-                        $sql = "SELECT * FROM `profiles` WHERE `agent_account_id` = '$agent_id'";
-                        $result = mysqli_query($conn, $sql);
-                        $numRows = mysqli_num_rows($result);
+                        $agent_id = $agentAccountId;
+                        $profileStatement = $conn->prepare('SELECT 1 FROM profiles WHERE agent_account_id = ? LIMIT 1');
+                        $profileStatement->bind_param('i', $agent_id);
+                        $profileStatement->execute();
+                        $numRows = $profileStatement->get_result()->num_rows;
+                        $profileStatement->close();
                         if ($numRows == 0) {
                             echo '<div class="add_card">
                                     <h2 class="display-4">No Business idea found</h2>
                                     <p class="lead">You have not uploaded any business idea yet.</p>
                                 </div>';
                         } else {
-                            while ($row = mysqli_fetch_assoc($result)) {
-                                $agent_profile_id = $_SESSION['id'];
-                                $sql = "SELECT * FROM `business_ideas` WHERE user_id = $agent_profile_id";
-                                $result = mysqli_query($conn, $sql);
-                                $numRows = mysqli_num_rows($result);
-                                if ($numRows == 0) {
+                            $agent_profile_id = $agentAccountId;
+                            $ideasStatement = $conn->prepare('SELECT * FROM business_ideas WHERE user_id = ? ORDER BY id DESC');
+                            $ideasStatement->bind_param('i', $agent_profile_id);
+                            $ideasStatement->execute();
+                            $result = $ideasStatement->get_result();
+                            $numRows = $result->num_rows;
+                            if ($numRows > 0) {
+                                while ($row = $result->fetch_assoc()) {
+                                    $business_idea_id = (int)$row['id'];
+                                    echo ' <div class="card">
+                                        <h2>' . $escape($row['idea_title']) . '</h2>
+                                        <p>' . $escape($row['problem_statement']) . '</p>
+                                        <div class="buttons">
+                                        <a href="../ideas/idea_details.php?business_idea_id=' . $business_idea_id . '" class="explore_btn">Explore</a>
+                                        <a href="./update_idea.php?business_idea_id=' . $business_idea_id . '" class="edit_idea">Edit</a>
+                                        <form action="../admin/delete_idea.php" method="post"><input type="hidden" name="csrf_token" value="' . $csrfToken . '"><input type="hidden" name="business_idea_id" value="' . $business_idea_id . '"><button class="delete_idea" type="submit">Delete</button></form>
+                                        <p class="status status_' . $escape($row["status"]) . '">' . $escape($row["status"]) . '</p>
+                                        </div>
+                                        </div>';
+                                }
+                            } else {
                                     echo  '<div class="add_card">
                                             <h2 class="display-4">No Business idea found</h2>
                                             <p class="lead">You have not uploaded any business idea yet.</p>
                                         </div>';
-                                } else {
-                                    // Yet busines table is not created so we are showing dummy data for now, once business table is created we will fetch data from there and show here
-                                    while ($row = mysqli_fetch_assoc($result)) {
-                                        $business_idea_id = (int)$row["id"];
-                                        $agent_profile_id = (int)$row["user_id"];
-                                        echo ' <div class="card">
-                                        <h2>' . $row["idea_title"] . '</h2>
-                                        <p>' . $row["problem_statement"] . '</p>
-                                        <div class="buttons">
-                                        <a href="../ideas/idea_details.php?business_idea_id=' . $business_idea_id . '&agent_profile_id=' . $agent_profile_id . '" class="explore_btn">Explore</a>
-                                        <a href="./update_idea.php?business_idea_id=' . $business_idea_id . '&agent_profile_id=' . $agent_profile_id . '" class="edit_idea">Edit</a>
-                                        <a href="../admin/delete_idea.php?business_idea_id=' . $business_idea_id . '&agent_profile_id=' . $agent_profile_id . '" class="delete_idea">Delete</a>
-                                        <p class="status status_' . $row["status"] . '">' . $row["status"] . '</p>
-                                        </div>
-                                        </div>';
-                                    }
-                                }
                             }
+                            $ideasStatement->close();
                         }
                     }
                     ?>

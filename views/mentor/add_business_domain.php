@@ -1,8 +1,22 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../config/security.php';
+$accountRole = requireAccountRole($conn, ['agent']);
+$csrfToken = csrfToken();
+$agentId = (int)$_SESSION['id'];
+$profileStatement = $conn->prepare("SELECT 1 FROM profiles WHERE agent_account_id = ? AND status = 'Approved' LIMIT 1");
+$profileStatement->bind_param('i', $agentId);
+$profileStatement->execute();
+$profileApproved = $profileStatement->get_result()->num_rows > 0;
+$profileStatement->close();
+if (!$profileApproved) {
+    http_response_code(403);
+    exit('An approved agent profile is required to submit ideas.');
+}
 if (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] === true) {
     if ($_SERVER['REQUEST_METHOD'] == "POST") {
+        requirePostCsrfToken();
 
         $idea_title = htmlspecialchars($_POST["idea_title"], ENT_QUOTES, 'UTF-8');
         $idea_category = htmlspecialchars($_POST["idea_category"], ENT_QUOTES, 'UTF-8');
@@ -29,11 +43,13 @@ if (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] === true) {
             exit;
         }
 
-        $sql = "INSERT INTO `business_ideas` (idea_title, idea_category, idea_stage, problem_statement, problem_solution, proposition_value, target_market, market_size, business_model, resources, outcomes, keywords, visibility, user_id) VALUES ('$idea_title', '$idea_category', '$idea_stage', '$problem_statement', '$problem_solution', '$proposition_value', '$target_market', '$market_size', '$business_model', '$resources', '$outcomes', '$keywords', '$visibility', '$user_id')";
-
-        $result = mysqli_query($conn, $sql);
+        $statement = $conn->prepare('INSERT INTO business_ideas (idea_title, idea_category, idea_stage, problem_statement, problem_solution, proposition_value, target_market, market_size, business_model, resources, outcomes, keywords, visibility, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        $statement->bind_param('sssssssssssssi', $idea_title, $idea_category, $idea_stage, $problem_statement, $problem_solution, $proposition_value, $target_market, $market_size, $business_model, $resources, $outcomes, $keywords, $visibility, $user_id);
+        $result = $statement->execute();
+        $statement->close();
         if (!$result) {
-            echo "Data insertion failed" . mysqli_error($conn);
+            http_response_code(500);
+            echo "Data insertion failed.";
         } else {
             $alert = "✅ Business idea added Successfully.";
             header("Location: agent_portal.php?alert=$alert");
@@ -80,6 +96,7 @@ if (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] === true) {
 
 
             <form action="./add_business_domain.php" method="post">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                 <div class="field_set">
                     <label>Business Idea Title *</label>
                     <input type="text" class="idea_input" name="idea_title" placeholder="Enter business idea title"

@@ -1,11 +1,21 @@
  <?php
     session_start();
     require_once __DIR__ . '/../../config/database.php';
+    require_once __DIR__ . '/../../config/security.php';
+    requireAccountRole($conn, ['admin']);
+    $csrfToken = htmlspecialchars(csrfToken(), ENT_QUOTES, 'UTF-8');
 
-    $query = "";
-    if (isset($_GET['q'])) {
-        $query = mysqli_real_escape_string($conn, $_GET['q']);
+    $query = $_GET['q'] ?? '';
+    if (!is_string($query)) {
+        http_response_code(400);
+        exit('Invalid search query.');
     }
+    $pattern = '%' . $query . '%';
+    $statement = $conn->prepare("SELECT * FROM accounts WHERE (first_name LIKE ? OR last_name LIKE ? OR email LIKE ?) AND entity_type = 'user'");
+    $statement->bind_param('sss', $pattern, $pattern, $pattern);
+    $statement->execute();
+    $users = $statement->get_result();
+    $escape = static fn($value) => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
     ?>
  <!DOCTYPE html>
  <html lang="en">
@@ -55,7 +65,7 @@
              <?php
                 if (isset($_GET['alert'])) {
                     $alert = $_GET['alert'];
-                    echo '<p id="alert_message">' . $alert . '</p>';
+                    echo '<p id="alert_message">' . $escape($alert) . '</p>';
                     unset($alert);
                 }
                 ?>
@@ -75,29 +85,23 @@
 
                      <tbody>
                          <?php
-                            $sql = "SELECT * FROM accounts 
-              WHERE (first_name LIKE '%$query%' 
-              OR last_name LIKE '%$query%'
-              OR email LIKE '%$query%')
-              AND (entity_type='user')";
-
-                            $result = mysqli_query($conn, $sql);
-                            if (mysqli_num_rows($result) == 0) {
+                            if ($users->num_rows === 0) {
                                 echo '<tr>
                             <td colspan="6">No result found</td>
                         </tr>';
                             } else {
-                                while ($row = mysqli_fetch_assoc($result)) {
+                                while ($row = $users->fetch_assoc()) {
                                     echo '<tr>
                                         <td><img src="../../public/assets/images/profile.png" class="table_profile"></td>
-                                        <td>' . $row["first_name"] . ' ' . $row["last_name"] . '</td>
-                                        <td>' . $row["email"] . '</td>
-                                        <td><span class="badge ' . ($row["status"] == "Blocked" ? "Blocked" : "Approved") . '">' . $row["status"] . '</span></td>
-                                        <td><a href="../admin/block_user.php?id=' . $row["id"] . '">' . ($row["status"] == "Blocked" ? "Unblock" : "Block") . '</a></td>
+                                        <td>' . $escape($row["first_name"] . ' ' . $row["last_name"]) . '</td>
+                                        <td>' . $escape($row["email"]) . '</td>
+                                        <td><span class="badge ' . ($row["status"] == "Blocked" ? "Blocked" : "Approved") . '">' . $escape($row["status"]) . '</span></td>
+                                        <td><form action="../admin/block_user.php" method="post"><input type="hidden" name="csrf_token" value="' . $csrfToken . '"><input type="hidden" name="id" value="' . (int)$row["id"] . '"><button type="submit">' . ($row["status"] == "Blocked" ? "Unblock" : "Block") . '</button></form></td>
                                     </tr>';
                                 }
                             }
                             ?>
+                            <?php $statement->close(); ?>
                      </tbody>
                  </table>
              </div>

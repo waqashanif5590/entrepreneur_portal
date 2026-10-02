@@ -1,44 +1,54 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../config/security.php';
 
-if (!isset($_SESSION['id'])) {
-    die("Login required");
-}
+$role = requireAccountRole($conn, ['user', 'agent']);
+$csrfToken = csrfToken();
 
-$rawRecipientId = $_GET['user_id'] ?? null;
-if (!is_string($rawRecipientId) || !preg_match('/\A[0-9]+\z/', $rawRecipientId) || (int)$rawRecipientId < 1 || (string)(int)$rawRecipientId !== ltrim($rawRecipientId, '0')) {
+$chat_with = requestPositiveId($_GET['user_id'] ?? null);
+if ($chat_with === null) {
     http_response_code(400);
     exit('Invalid user.');
 }
-$chat_with = (int)$rawRecipientId;
 
 $recipient_image = '../../public/assets/images/profile.png';
-$my_id = $_SESSION['id'];
-$my_type = '';
-$chat_with_type = '';
-
-$my_type_query = mysqli_query($conn, "SELECT entity_type FROM accounts WHERE id='$my_id'");
-if ($my_type_query) {
-    $my_type_row = mysqli_fetch_assoc($my_type_query);
-    $my_type = $my_type_row['entity_type'] ?? '';
+$my_id = (int)$_SESSION['id'];
+if (!canAccessConversation($conn, $my_id, $role, $chat_with)) {
+    http_response_code(404);
+    exit('Conversation not found.');
 }
-
-$chat_with_query = mysqli_query($conn, "SELECT entity_type FROM accounts WHERE id='$chat_with'");
-if ($chat_with_query) {
-    $chat_with_row = mysqli_fetch_assoc($chat_with_query);
-    $chat_with_type = $chat_with_row['entity_type'] ?? '';
+$nameStatement = $conn->prepare('SELECT first_name, last_name FROM accounts WHERE id = ? LIMIT 1');
+$nameStatement->bind_param('i', $chat_with);
+$nameStatement->execute();
+$recipient = $nameStatement->get_result()->fetch_assoc();
+$nameStatement->close();
+if ($role === 'user') {
+    $recipient_image = '../profiles/profile_image.php?agent_account_id=' . $chat_with;
 }
-
-if ($my_type === 'user' && $chat_with_type === 'agent') {
-    $profile_query = mysqli_query($conn, "SELECT profile_image FROM profiles WHERE agent_account_id='$chat_with' LIMIT 1");
-    if ($profile_query) {
-        $profile_row = mysqli_fetch_assoc($profile_query);
-        if (!empty($profile_row['profile_image'])) {
-            $recipient_image = '../../uploads/profiles/' . htmlspecialchars($profile_row['profile_image']);
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requirePostCsrfToken();
+    $message = trim($_POST['new_message'] ?? '');
+    if ($message !== '') {
+        $insert = $conn->prepare('INSERT INTO messages (message_text, sender_id, receiver_id) VALUES (?, ?, ?)');
+        $insert->bind_param('sii', $message, $my_id, $chat_with);
+        if (!$insert->execute()) {
+            http_response_code(500);
+            exit('Unable to send message.');
         }
+        $insert->close();
     }
 }
+
+$messagesStatement = $conn->prepare('SELECT * FROM messages WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?) ORDER BY sent_date ASC');
+$messagesStatement->bind_param('iiii', $my_id, $chat_with, $chat_with, $my_id);
+$messagesStatement->execute();
+$messages = $messagesStatement->get_result();
+$readStatement = $conn->prepare('UPDATE messages SET is_read = 1 WHERE sender_id = ? AND receiver_id = ?');
+$readStatement->bind_param('ii', $chat_with, $my_id);
+$readStatement->execute();
+$readStatement->close();
+$escape = static fn($value) => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 
 ?>
 <!DOCTYPE html>
@@ -71,70 +81,23 @@ if ($my_type === 'user' && $chat_with_type === 'agent') {
                     <img src="<?php echo $recipient_image; ?>" alt="">
                 </div>
                 <h2>
-                    <?php
-                    $sql_name = "SELECT first_name, last_name 
-             FROM accounts 
-             WHERE id='$chat_with'";
-
-                    $result_name = mysqli_query($conn, $sql_name);
-                    $row_name = mysqli_fetch_assoc($result_name);
-
-                    if ($row_name) {
-                        echo $row_name['first_name'] . ' ' . $row_name['last_name'];
-                    } else {
-                        echo "Unknown User";
-                    }
-                    ?>
+                    <?php echo $escape(($recipient['first_name'] ?? '') . ' ' . ($recipient['last_name'] ?? '')); ?>
             </div>
-            <?php
-
-            /* =============================
-   SEND MESSAGE
-============================= */
-            if (isset($_POST['new_message']) && trim($_POST['new_message']) != '') {
-
-                $msg = mysqli_real_escape_string($conn, $_POST['new_message']);
-
-                mysqli_query(
-                    $conn,
-                    "INSERT INTO messages(message_text,sender_id,receiver_id)
-     VALUES('$msg','$my_id','$chat_with')"
-                );
-            }
-
-            /* =============================
-   LOAD CHAT HISTORY
-============================= */
-            $sql = "SELECT * FROM messages
-        WHERE (sender_id='$my_id' AND receiver_id='$chat_with')
-           OR (sender_id='$chat_with' AND receiver_id='$my_id')
-        ORDER BY sent_date ASC";
-
-            $result = mysqli_query($conn, $sql);
-            mysqli_query(
-                $conn,
-                "UPDATE messages 
-     SET is_read = 1 
-     WHERE sender_id = '$chat_with' 
-       AND receiver_id = '$my_id'"
-            );
-
-            ?>
 
             <div class="chat">
 
-                <?php while ($row = mysqli_fetch_assoc($result)): ?>
+                <?php while ($row = $messages->fetch_assoc()): ?>
 
                     <?php if ($row['sender_id'] == $my_id): ?>
 
                         <div class="sent_message">
-                            <p><?php echo $row['message_text']; ?></p>
+                            <p><?php echo $escape($row['message_text']); ?></p>
                         </div>
 
                     <?php else: ?>
 
                         <div class="received_message">
-                            <p><?php echo $row['message_text']; ?></p>
+                            <p><?php echo $escape($row['message_text']); ?></p>
                         </div>
 
                     <?php endif; ?>
@@ -142,6 +105,7 @@ if ($my_type === 'user' && $chat_with_type === 'agent') {
                 <?php endwhile; ?>
                 <div class="type_new">
                     <form method="post">
+                        <input type="hidden" name="csrf_token" value="<?php echo $escape($csrfToken); ?>">
                         <input type="text" name="new_message" required>
                         <button>Send</button>
                     </form>

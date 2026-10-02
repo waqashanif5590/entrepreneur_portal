@@ -1,6 +1,8 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../config/security.php';
+requireAccountRole($conn, ['user']);
 
 ?>
 <!DOCTYPE html>
@@ -35,11 +37,12 @@ require_once __DIR__ . '/../../config/database.php';
 
             <div class="business_ideas">
                 <h1>Featured business ideas</h1>
-                <div class="business_card_container">
+                <div class="card business_card_container">
                     <?php
                     if (isset($_SESSION["loggedin"]) && $_SESSION["loggedin"] == true) {
-                        $sql = "SELECT * FROM `business_ideas` WHERE `status`='Approved'";
-                        $result = mysqli_query($conn, $sql);
+                        $statement = $conn->prepare("SELECT * FROM business_ideas WHERE status = 'Approved' AND visibility = 'Public'");
+                        $statement->execute();
+                        $result = $statement->get_result();
                         $numRows = mysqli_num_rows($result);
                         if ($numRows > 0) {
                             while ($row = mysqli_fetch_assoc($result)) {

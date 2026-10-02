@@ -1,22 +1,20 @@
 <?php
-require_once __DIR__ . '/../../config/database.php';
 session_start();
-$rawAgentAccountId = $_GET['agent_account_id'] ?? null;
-if (!is_string($rawAgentAccountId) || !preg_match('/\A[0-9]+\z/', $rawAgentAccountId) || (int)$rawAgentAccountId < 1 || (string)(int)$rawAgentAccountId !== ltrim($rawAgentAccountId, '0')) {
+require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../config/security.php';
+
+requireAccountRole($conn, ['admin']);
+requirePostCsrfToken();
+$agentId = requestPositiveId($_POST['agent_account_id'] ?? null);
+if ($agentId === null) {
     http_response_code(400);
     exit('Invalid agent request.');
 }
-$agent_account_id = (int)$rawAgentAccountId;
-$sql = "SELECT * FROM `profiles` WHERE agent_account_id='$agent_account_id'";
-$result = mysqli_query($conn, $sql);
-while ($row = mysqli_fetch_assoc($result)) {
-    if ($row["status"] == "Pending") {
-        $sql = "UPDATE `profiles` SET `status` = 'Rejected' WHERE agent_account_id='$agent_account_id'";
-        $result = mysqli_query($conn, $sql);
-        $agent_account_id = (int)$row['agent_account_id'];
 
-        $alert = "Agent status rejected";
-        header("Location: ../profiles/selected_agent.php?agent_account_id=$agent_account_id&alert=$alert");
-        exit();
-    }
-}
+$statement = $conn->prepare("UPDATE profiles SET status = 'Rejected' WHERE agent_account_id = ? AND status = 'Pending'");
+$statement->bind_param('i', $agentId);
+$statement->execute();
+$alert = $statement->affected_rows ? 'Agent status rejected' : 'Agent was not pending';
+$statement->close();
+header('Location: ../profiles/selected_agent.php?agent_account_id=' . $agentId . '&alert=' . urlencode($alert));
+exit();

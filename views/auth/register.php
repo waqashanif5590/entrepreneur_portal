@@ -3,32 +3,38 @@ $alert = '';
 if ($_SERVER['REQUEST_METHOD'] == "POST") {
     require_once __DIR__ . '/../../config/database.php';
 
-    $firstname = $_POST["first_name"];
-    $lastname = $_POST["last_name"];
-    $entity_type = $_POST["entity_type"];
-    $email = $_POST["email"];
-    $password = $_POST["password"];
-    $confirm_pass = $_POST["confirm_password"];
+    $firstname = trim($_POST["first_name"] ?? '');
+    $lastname = trim($_POST["last_name"] ?? '');
+    $entity_type = $_POST["entity_type"] ?? '';
+    $email = trim($_POST["email"] ?? '');
+    $password = $_POST["password"] ?? '';
+    $confirm_pass = $_POST["confirm_password"] ?? '';
 
-    // Check whether email already exists
-    $hash = password_hash($password, PASSWORD_DEFAULT);
-    $check_sql = "SELECT * FROM `accounts` WHERE email='$email'";
-    $check_result = mysqli_query($conn, $check_sql);
-    $resultCount = mysqli_num_rows($check_result);
-    if ($resultCount > 0) {
-        $alert = "❌ Email or Username already exists.";
+    $validEntityType = in_array($entity_type, ['user', 'agent'], true);
+    if (!$validEntityType) {
+        $alert = '❌ Please select a valid account type.';
     } else {
-        if ($password == $confirm_pass) {
-            $insert_sql = "INSERT INTO `accounts` (`first_name`, `last_name`, `entity_type`, `email`, `password`) VALUES (
-            '$firstname','$lastname','$entity_type','$email','$hash')";
-            $result = mysqli_query($conn, $insert_sql);
-            if ($result) {
+        $checkStatement = $conn->prepare('SELECT id FROM accounts WHERE email = ? LIMIT 1');
+        $checkStatement->bind_param('s', $email);
+        $checkStatement->execute();
+        $emailExists = $checkStatement->get_result()->num_rows > 0;
+        $checkStatement->close();
+    }
+    if ($validEntityType && $emailExists) {
+        $alert = "❌ Email or Username already exists.";
+    } elseif ($validEntityType) {
+        if ($password !== '' && $password === $confirm_pass) {
+            $hash = password_hash($password, PASSWORD_DEFAULT);
+            $insertStatement = $conn->prepare('INSERT INTO accounts (first_name, last_name, entity_type, email, password) VALUES (?, ?, ?, ?, ?)');
+            $insertStatement->bind_param('sssss', $firstname, $lastname, $entity_type, $email, $hash);
+            if ($insertStatement->execute()) {
                 $alert = "✅ Account created successfully";
                 header('Location: login.php?type=' . $entity_type);
                 exit;
             } else {
-                $alert = '❌ Database error: ' . mysqli_error($conn);
+                $alert = '❌ Unable to create the account.';
             }
+            $insertStatement->close();
         } else {
             $alert = '❌ Password do not match';
         }

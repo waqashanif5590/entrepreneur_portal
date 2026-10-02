@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../config/security.php';
 
 if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] != true) {
     header("Location: ../auth/login_dashboard.php");
@@ -8,13 +9,14 @@ if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] != true) {
 }
 
 $logged_in_id = $_SESSION['id'];
+$viewerRole = requireAccountRole($conn, ['agent']);
+$csrfToken = csrfToken();
 
 // Get and validate idea ID
-$rawIdeaId = $_GET['business_idea_id'] ?? null;
-if (!is_string($rawIdeaId) || !preg_match('/\A[0-9]+\z/', $rawIdeaId) || (int)$rawIdeaId < 1 || (string)(int)$rawIdeaId !== ltrim($rawIdeaId, '0')) {
+$idea_id = requestPositiveId($_GET['business_idea_id'] ?? null);
+if ($idea_id === null) {
     die("Error: Invalid Idea ID.");
 }
-$idea_id = (int)$rawIdeaId;
 
 // ==================== FETCH EXISTING BUSINESS IDEA ====================
 $ideaStatement = $conn->prepare('SELECT * FROM business_ideas WHERE id = ? LIMIT 1');
@@ -33,27 +35,29 @@ if (mysqli_num_rows($result) == 0) {
 $idea = mysqli_fetch_assoc($result);
 
 // Security: Verify that this idea belongs to the logged-in user
-if ($idea['user_id'] != $logged_in_id) {
-    die("You do not have permission to edit this business idea.");
+if ((int)$idea['user_id'] !== (int)$logged_in_id) {
+    http_response_code(403);
+    exit("You do not have permission to edit this business idea.");
 }
 
 // ==================== HANDLE FORM SUBMISSION ====================
 if ($_SERVER['REQUEST_METHOD'] == "POST") {
+    requirePostCsrfToken();
 
-    $idea_title        = mysqli_real_escape_string($conn, $_POST['idea_title'] ?? '');
-    $idea_category     = mysqli_real_escape_string($conn, $_POST['idea_category'] ?? '');
-    $other_category    = mysqli_real_escape_string($conn, $_POST['other_category'] ?? '');
-    $idea_stage        = mysqli_real_escape_string($conn, $_POST['idea_stage'] ?? '');
-    $problem_statement = mysqli_real_escape_string($conn, $_POST['problem'] ?? '');
-    $problem_solution  = mysqli_real_escape_string($conn, $_POST['solution'] ?? '');
-    $proposition_value = mysqli_real_escape_string($conn, $_POST['value'] ?? '');
-    $target_market     = mysqli_real_escape_string($conn, $_POST['target_market'] ?? '');
-    $market_size       = mysqli_real_escape_string($conn, $_POST['market_size'] ?? '');
-    $business_model    = mysqli_real_escape_string($conn, $_POST['model'] ?? '');
-    $resources         = mysqli_real_escape_string($conn, $_POST['resources'] ?? '');
-    $outcomes          = mysqli_real_escape_string($conn, $_POST['outcomes'] ?? '');
-    $keywords          = mysqli_real_escape_string($conn, $_POST['keywords'] ?? '');
-    $visibility        = mysqli_real_escape_string($conn, $_POST['visibility'] ?? '');
+    $idea_title        = trim($_POST['idea_title'] ?? '');
+    $idea_category     = trim($_POST['idea_category'] ?? '');
+    $other_category    = trim($_POST['other_category'] ?? '');
+    $idea_stage        = trim($_POST['idea_stage'] ?? '');
+    $problem_statement = trim($_POST['problem'] ?? '');
+    $problem_solution  = trim($_POST['solution'] ?? '');
+    $proposition_value = trim($_POST['value'] ?? '');
+    $target_market     = trim($_POST['target_market'] ?? '');
+    $market_size       = trim($_POST['market_size'] ?? '');
+    $business_model    = trim($_POST['model'] ?? '');
+    $resources         = trim($_POST['resources'] ?? '');
+    $outcomes          = trim($_POST['outcomes'] ?? '');
+    $keywords          = trim($_POST['keywords'] ?? '');
+    $visibility        = trim($_POST['visibility'] ?? '');
 
     // Handle "Others" category
     if ($idea_category === 'others' && !empty($other_category)) {
@@ -65,33 +69,21 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
         empty($idea_title) || empty($idea_category) || empty($idea_stage) ||
         empty($problem_statement) || empty($problem_solution) ||
         empty($proposition_value) || empty($target_market) ||
-        empty($business_model) || empty($visibility)
+        empty($business_model) || !in_array($visibility, ['Public', 'Private', 'Mentors Only'], true)
     ) {
 
         $alert = "❌ Please fill all required fields.";
     } else {
-        $update_sql = "UPDATE business_ideas SET 
-            idea_title = '$idea_title',
-            idea_category = '$idea_category',
-            idea_stage = '$idea_stage',
-            problem_statement = '$problem_statement',
-            problem_solution = '$problem_solution',
-            proposition_value = '$proposition_value',
-            target_market = '$target_market',
-            market_size = '$market_size',
-            business_model = '$business_model',
-            resources = '$resources',
-            outcomes = '$outcomes',
-            keywords = '$keywords',
-            visibility = '$visibility'
-            WHERE id = '$idea_id'";
-
-        if (mysqli_query($conn, $update_sql)) {
+        $update = $conn->prepare('UPDATE business_ideas SET idea_title = ?, idea_category = ?, idea_stage = ?, problem_statement = ?, problem_solution = ?, proposition_value = ?, target_market = ?, market_size = ?, business_model = ?, resources = ?, outcomes = ?, keywords = ?, visibility = ? WHERE id = ? AND user_id = ?');
+        $update->bind_param('sssssssssssssii', $idea_title, $idea_category, $idea_stage, $problem_statement, $problem_solution, $proposition_value, $target_market, $market_size, $business_model, $resources, $outcomes, $keywords, $visibility, $idea_id, $logged_in_id);
+        if ($update->execute()) {
+            $update->close();
             $alert = "✅ Business idea updated successfully!";
             header("Location: agent_portal.php?alert=" . urlencode($alert));
             exit;
         } else {
-            $alert = "❌ Update failed: " . mysqli_error($conn);
+            $alert = "❌ Update failed.";
+            $update->close();
         }
     }
 }
@@ -128,6 +120,7 @@ $cancel_url = '../ideas/idea_details.php?business_idea_id=' . $idea_id . '&agent
             <?php endif; ?>
 
             <form method="post">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
 
                 <div class="field_set">
                     <label>Business Idea Title *</label>

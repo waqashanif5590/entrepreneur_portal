@@ -1,24 +1,10 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../config/security.php';
 
-if (empty($_SESSION['loggedin']) || empty($_SESSION['id'])) {
-    http_response_code(403);
-    exit('Please sign in to view forums.');
-}
-
+$role = requireAccountRole($conn, ['admin', 'agent', 'user']);
 $accountId = (int)$_SESSION['id'];
-$roleStatement = $conn->prepare('SELECT entity_type FROM accounts WHERE id = ?');
-$roleStatement->bind_param('i', $accountId);
-$roleStatement->execute();
-$account = $roleStatement->get_result()->fetch_assoc();
-$roleStatement->close();
-$role = $account['entity_type'] ?? '';
-
-if (!in_array($role, ['admin', 'agent', 'user'], true)) {
-    http_response_code(403);
-    exit('Access denied.');
-}
 
 $statusFilter = '';
 $forums = false;
@@ -56,6 +42,7 @@ if ($role === 'admin') {
 }
 
 $escape = static fn($value) => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$csrfToken = csrfToken();
 $alert = $_GET['alert'] ?? '';
 ?>
 <!DOCTYPE html>
@@ -126,9 +113,9 @@ $alert = $_GET['alert'] ?? '';
                                     <a href="forum.php?author_id=<?php echo $authorId; ?>&forum_id=<?php echo $forumId; ?>" class="explore_btn">Explore</a>
                                     <?php if ($role === 'admin'): ?>
                                         <?php if ($forum['status'] === 'Pending'): ?>
-                                            <a href="../admin/forum_action.php?action=approve&amp;forum_id=<?php echo $forumId; ?>" class="approve_btn">Approve</a>
+                                            <form action="../admin/forum_action.php" method="post"><input type="hidden" name="csrf_token" value="<?php echo $escape($csrfToken); ?>"><input type="hidden" name="action" value="approve"><input type="hidden" name="forum_id" value="<?php echo $forumId; ?>"><button class="approve_btn" type="submit">Approve</button></form>
                                         <?php endif; ?>
-                                        <a href="../admin/forum_action.php?action=delete&amp;forum_id=<?php echo $forumId; ?>" class="delete_btn">Delete</a>
+                                        <form action="../admin/forum_action.php" method="post"><input type="hidden" name="csrf_token" value="<?php echo $escape($csrfToken); ?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="forum_id" value="<?php echo $forumId; ?>"><button class="delete_btn" type="submit">Delete</button></form>
                                     <?php endif; ?>
                                     <span class="date"><?php echo $escape($forum['date']); ?></span>
                                 </div>

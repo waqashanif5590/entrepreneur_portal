@@ -1,11 +1,26 @@
  <?php
     session_start();
     require_once __DIR__ . '/../../config/database.php';
+    require_once __DIR__ . '/../../config/security.php';
 
-    $query = "";
-    if (isset($_GET['q'])) {
-        $query = mysqli_real_escape_string($conn, $_GET['q']);
+    $query = $_GET['q'] ?? '';
+    if (!is_string($query)) {
+        http_response_code(400);
+        exit('Invalid search query.');
     }
+    $viewerRole = '';
+    $viewerId = (int)($_SESSION['id'] ?? 0);
+    if (!empty($_SESSION['loggedin']) && $viewerId > 0) {
+        $viewerRole = requireAccountRole($conn, ['admin', 'agent', 'user']);
+    }
+    $pattern = '%' . $query . '%';
+    $where = "status = 'Approved' AND visibility = 'Public' AND (idea_title LIKE ? OR idea_category LIKE ? OR problem_statement LIKE ? OR keywords LIKE ?)";
+    if ($viewerRole === 'admin') {
+        $where = '(idea_title LIKE ? OR idea_category LIKE ? OR problem_statement LIKE ? OR keywords LIKE ?)';
+    } elseif ($viewerRole === 'agent') {
+        $where = "((status = 'Approved' AND visibility IN ('Public', 'Mentors Only')) OR user_id = ?) AND (idea_title LIKE ? OR idea_category LIKE ? OR problem_statement LIKE ? OR keywords LIKE ?)";
+    }
+    $escape = static fn($value) => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
     ?>
  <!DOCTYPE html>
  <html lang="en">
@@ -74,38 +89,40 @@
 
 
                          <?php
-                            $sql = "SELECT * FROM business_ideas 
-              WHERE idea_title LIKE '%$query%' 
-              OR idea_category LIKE '%$query%'
-              OR problem_statement LIKE '%$query%'
-              OR keywords LIKE '%$query%'";
-
-                            $result = mysqli_query($conn, $sql);
-                            if (mysqli_num_rows($result) == 0) {
+                            $statement = $conn->prepare("SELECT * FROM business_ideas WHERE $where");
+                            if ($viewerRole === 'agent') {
+                                $statement->bind_param('issss', $viewerId, $pattern, $pattern, $pattern, $pattern);
+                            } else {
+                                $statement->bind_param('ssss', $pattern, $pattern, $pattern, $pattern);
+                            }
+                            $statement->execute();
+                            $result = $statement->get_result();
+                            if ($result->num_rows === 0) {
                                 echo '<tr>
                             <td colspan="6">No result found</td>
                         </tr>';
                             }
-                            while ($row = mysqli_fetch_assoc($result)) {
-                                $agent_id = $row["user_id"];
-                                $business_idea_id = $row["id"];
-                                $sql2 = "SELECT * FROM `profiles` WHERE agent_account_id='$agent_id'";
-                                $result2 = mysqli_query($conn, $sql2);
-                                while ($row2 = mysqli_fetch_assoc($result2)) {
-                                    $field_expertise = $row2["field_expertise"];
-                                    $agent_f_name = $row2["agent_f_name"];
-                                    $agent_l_name = $row2["agent_l_name"];
-                                }
+                            while ($row = $result->fetch_assoc()) {
+                                $agent_id = (int)$row["user_id"];
+                                $business_idea_id = (int)$row["id"];
+                                $profileStatement = $conn->prepare('SELECT field_expertise, agent_f_name, agent_l_name FROM profiles WHERE agent_account_id = ? LIMIT 1');
+                                $profileStatement->bind_param('i', $agent_id);
+                                $profileStatement->execute();
+                                $row2 = $profileStatement->get_result()->fetch_assoc() ?? [];
+                                $profileStatement->close();
+                                $field_expertise = $row2["field_expertise"] ?? '';
+                                $agent_f_name = $row2["agent_f_name"] ?? '';
+                                $agent_l_name = $row2["agent_l_name"] ?? '';
                                 echo '<tr>
-                            <td><img src="../../uploads/profiles/' . $row['profile_image'] . '" class="table_profile"></td>
-                            <td>' . $agent_f_name . ' ' . $agent_l_name . '</td>
-                            <td><span>' . $row["idea_title"] . '</span></td>
-                            <td>' . $field_expertise . '</td>
-                            <td><span class="badge ' . $row["status"] . '">' . $row["status"] . '</span></td>
-                            <td><a href="../ideas/idea_details.php?agent_profile_id=' . (int)$agent_id . '&business_idea_id=' . (int)$business_idea_id . '">View</a></td>
+                            <td><img src="../profiles/profile_image.php?agent_account_id=' . $agent_id . '" class="table_profile"></td>
+                            <td>' . $escape($agent_f_name . ' ' . $agent_l_name) . '</td>
+                            <td><span>' . $escape($row["idea_title"]) . '</span></td>
+                            <td>' . $escape($field_expertise) . '</td>
+                            <td><span class="badge ' . $escape($row["status"]) . '">' . $escape($row["status"]) . '</span></td>
+                            <td><a href="../ideas/idea_details.php?business_idea_id=' . $business_idea_id . '">View</a></td>
                         </tr>';
                             }
-
+                            $statement->close();
                             ?>
                      </tbody>
                  </table>
